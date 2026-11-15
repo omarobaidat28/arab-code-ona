@@ -1,0 +1,26 @@
+{
+ "name": "قاعة الأبواب",
+ "short_name": "قاعة الأبواب",
+ "description": "لعبة تعليمية بمنظور أول للمهارات الحياتية وريادة الأعمال",
+ "lang": "ar",
+ "dir": "rtl",
+ "start_url": "./",
+ "scope": "./",
+ "display": "fullscreen",
+ "orientation": "landscape",
+ "background_color": "#07060c",
+ "theme_color": "#07060c",
+ "icons": [
+  {
+   "src": "icons/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icons/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}
