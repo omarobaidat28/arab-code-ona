@@ -50,7 +50,7 @@
   }
   C.close = () => { const o = $('#acct'); if (o) o.hidden = true; };
   function toastMsg(t) { const d = document.createElement('div'); d.className = 'qtoast good'; d.style.zIndex = 90; d.innerHTML = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3000); }
-  const errAr = e => ({ 'auth/invalid-email': 'البريد الإلكتروني غير صحيح', 'auth/user-not-found': 'لا يوجد حساب بهذا البريد', 'auth/wrong-password': 'كلمة المرور غير صحيحة', 'auth/invalid-credential': 'البريد أو كلمة المرور غير صحيحة', 'auth/email-already-in-use': 'هذا البريد مسجّل مسبقاً — سجّل الدخول', 'auth/weak-password': 'كلمة المرور قصيرة (6 أحرف على الأقل)', 'auth/network-request-failed': 'لا يوجد اتصال بالإنترنت', 'auth/popup-closed-by-user': 'أُغلقت نافذة تسجيل الدخول', 'auth/too-many-requests': 'محاولات كثيرة، انتظر قليلاً' }[e && e.code] || (e && e.message) || 'حدث خطأ');
+  const errAr = e => ({ 'auth/invalid-email': 'البريد الإلكتروني غير صحيح', 'auth/user-not-found': 'لا يوجد حساب بهذا البريد', 'auth/wrong-password': 'كلمة المرور غير صحيحة', 'auth/invalid-credential': 'البريد أو كلمة المرور غير صحيحة', 'auth/email-already-in-use': 'هذا البريد مسجّل مسبقاً — سجّل الدخول', 'auth/weak-password': 'كلمة المرور قصيرة (6 أحرف على الأقل)', 'auth/network-request-failed': 'لا يوجد اتصال بالإنترنت', 'auth/popup-closed-by-user': 'أُغلقت نافذة تسجيل الدخول', 'auth/too-many-requests': 'محاولات كثيرة، انتظر قليلاً', 'auth/account-exists-with-different-credential': 'بريد حساب GitHub هذا مسجّل مسبقاً بكلمة مرور — سجّل الدخول بالإيميل وكلمة المرور', 'auth/operation-not-allowed': 'الدخول بـ GitHub غير مفعّل بعد في إعدادات اللعبة', 'auth/unauthorized-domain': 'هذا الموقع غير مضاف في إعدادات Firebase (Authorized domains)', 'auth/popup-blocked': 'المتصفح منع نافذة تسجيل الدخول — اسمح بالنوافذ المنبثقة وحاول مجدداً', 'auth/cancelled-popup-request': 'أُغلقت نافذة تسجيل الدخول' }[e && e.code] || (e && e.message) || 'حدث خطأ');
 
   C.openLogin = (onDone, allowGuest = true) => {
     if (!C.enabled) {
@@ -68,7 +68,7 @@
           ${msg ? `<p class="acct-err">${msg}</p>` : ''}
           <button class="btn" type="submit" id="ac-go">${mode === 'login' ? 'دخول ▶' : 'إنشاء الحساب ✨'}</button>
         </form>
-        ${C.inApp ? '' : '<div class="acct-or">أو</div><button class="btn ghost" id="ac-google"><b style="color:#4285f4">G</b> الدخول بحساب Google</button>'}
+        ${C.inApp ? '' : '<div class="acct-or">أو</div><button class="btn ghost" id="ac-github" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%"><svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> الدخول بحساب GitHub</button>'}
         <div class="row center mt" style="gap:14px">
           <a href="#" id="ac-sw">${mode === 'login' ? 'ما عندك حساب؟ أنشئ حساباً' : 'عندك حساب؟ سجّل الدخول'}</a>
           ${mode === 'login' ? '<a href="#" id="ac-reset">نسيت كلمة المرور؟</a>' : ''}
@@ -84,7 +84,15 @@
       };
       $('#ac-sw').onclick = e => { e.preventDefault(); mode = mode === 'login' ? 'signup' : 'login'; draw(); };
       const rs = $('#ac-reset'); if (rs) rs.onclick = async e => { e.preventDefault(); const mail = $('#ac-mail').value.trim(); if (!mail) return draw('اكتب بريدك أولاً ثم اضغط «نسيت كلمة المرور»'); try { await C.auth.sendPasswordResetEmail(mail); draw('📧 أرسلنا رابط إعادة التعيين إلى بريدك'); } catch (er) { draw(errAr(er)); } };
-      const gg = $('#ac-google'); if (gg) gg.onclick = async () => { try { await C.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); C.close(); toastMsg(`👋 أهلاً ${esc(C.displayName())}!`); onDone && onDone(); } catch (e) { draw(errAr(e)); } };
+      const gh = $('#ac-github'); if (gh) gh.onclick = async () => {
+        gh.disabled = true;
+        try {
+          const r = await C.auth.signInWithPopup(new firebase.auth.GithubAuthProvider());
+          const u = r.user, nick = r.additionalUserInfo && r.additionalUserInfo.username;
+          if (u && !u.displayName && nick) { await u.updateProfile({ displayName: nick }); C.user = C.auth.currentUser; emit(); }
+          C.close(); toastMsg(`👋 أهلاً ${esc(C.displayName())}!`); onDone && onDone();
+        } catch (e) { draw(errAr(e)); }
+      };
       const gu = $('#ac-guest'); if (gu) gu.onclick = () => { C.guest = true; try { localStorage.setItem('hod-guest', '1'); } catch (e) { } C.close(); onDone && onDone(); };
       const x = $('#ac-x'); if (x) x.onclick = C.close;
     };
