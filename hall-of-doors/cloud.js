@@ -23,7 +23,7 @@
     if (!C.enabled || !C.user || !save) return;
     clearTimeout(pushT);
     pushT = setTimeout(() => {
-      C.db.collection('users').doc(C.user.uid).set({
+      C.db.collection('hod_users').doc(C.user.uid).set({
         save: JSON.stringify(save), xp: save.xp || 0, stars: Object.values(save.stars || {}).reduce((a, b) => a + b, 0),
         doors: Object.keys(save.stars || {}).length, name: C.displayName(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).then(() => { C.lastSync = Date.now(); emit(); }).catch(e => console.warn('push failed', e));
@@ -31,7 +31,7 @@
   };
   C.pull = async () => {
     try {
-      const d = await C.db.collection('users').doc(C.user.uid).get();
+      const d = await C.db.collection('hod_users').doc(C.user.uid).get();
       const local = window.__game && window.__game.save;
       if (d.exists && d.data().save) {
         const remote = JSON.parse(d.data().save);
@@ -41,7 +41,7 @@
       C.lastSync = Date.now(); emit();
     } catch (e) { console.warn('pull failed', e); }
   };
-  C.top = async () => { const q = await C.db.collection('users').orderBy('xp', 'desc').limit(10).get(); return q.docs.map(d => d.data()); };
+  C.top = async () => { const q = await C.db.collection('hod_users').orderBy('xp', 'desc').limit(10).get(); return q.docs.map(d => d.data()); };
 
   /* ---------- small UI helpers (own overlay, above the game) ---------- */
   function overlay(html) {

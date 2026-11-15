@@ -1,9 +1,11 @@
-/* إعدادات اللعبة — ضع هنا إعدادات مشروع Firebase الخاص بك (Project settings → Your apps → Web app → Config) */
+/* Hall of Doors — Firebase (ona-learning) */
 window.FIREBASE_CONFIG = {
-  apiKey: "PUT_YOUR_API_KEY",
-  authDomain: "PUT_PROJECT_ID.firebaseapp.com",
-  projectId: "PUT_PROJECT_ID",
-  appId: "PUT_APP_ID"
+  apiKey: "AIzaSyB1_KLhJqJxzJfF3hByDELeoIPESo849Qw",
+  authDomain: "ona-learning.firebaseapp.com",
+  projectId: "ona-learning",
+  storageBucket: "ona-learning.firebasestorage.app",
+  messagingSenderId: "894210341601",
+  appId: "1:894210341601:web:bbff8a1a524900af9495a0"
 };
 window.SITE_URL = "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/";
-window.APP_VERSION = "3.1.1";
+window.APP_VERSION = "3.2.0";
