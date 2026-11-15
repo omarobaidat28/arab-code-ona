@@ -1,12 +1,10 @@
 {
  "version": "3.1.1",
- "web": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/",
+ "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/3ca0b208792e5858651da5b39f373d315b09bc48/hall-of-doors/index.html",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
- "exe": "https://github.com/omarobaidat28/hall-of-doors/releases/latest",
+ "exe": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/3ca0b208792e5858651da5b39f373d315b09bc48/hall-of-doors/index.html",
  "notes": [
-  "تسجيل دخول وحفظ التقدّم في السحابة",
-  "لوحة المتصدّرين 🏆",
-  "الوضع الأفقي تلقائياً",
-  "تنبيه داخلي عند وجود تحديث"
+  "🔑 رمز نقل التقدّم بين الأجهزة (الإعدادات ⚙️)",
+  "تحسينات وإصلاحات"
  ]
 }
