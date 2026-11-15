@@ -25,7 +25,7 @@
     pushT = setTimeout(() => {
       C.db.collection('hod_users').doc(C.user.uid).set({
         save: JSON.stringify(save), xp: save.xp || 0, stars: Object.values(save.stars || {}).reduce((a, b) => a + b, 0),
-        doors: Object.keys(save.stars || {}).length, name: C.displayName(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        doors: Object.keys(save.stars || {}).length, name: C.displayName(), ...(window.hodStats ? window.hodStats(save) : {}), updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).then(() => { C.lastSync = Date.now(); emit(); }).catch(e => console.warn('push failed', e));
     }, 1200);
   };
@@ -35,13 +35,13 @@
       const local = window.__game && window.__game.save;
       if (d.exists && d.data().save) {
         const remote = JSON.parse(d.data().save);
-        if (!local || (remote.xp || 0) >= (local.xp || 0)) { window.__game && window.__game.adoptSave(remote); toastMsg('☁️ تم تحميل تقدّمك من حسابك'); }
+        if (!local || (remote.xp || 0) >= (local.xp || 0)) { window.__game && window.__game.adoptSave(remote); toastMsg('☁️ تم تحميل تقدّمك من حسابك'); if (window.hodStats && d.data().points !== window.hodStats(remote).points) C.push(remote); }
         else C.push(local);
       } else if (local) C.push(local);
       C.lastSync = Date.now(); emit();
     } catch (e) { console.warn('pull failed', e); }
   };
-  C.top = async () => { const q = await C.db.collection('hod_users').orderBy('xp', 'desc').limit(10).get(); return q.docs.map(d => d.data()); };
+  C.top = async (n = 50) => { const q = await C.db.collection('hod_users').orderBy('points', 'desc').limit(n).get(); return q.docs.map(d => Object.assign({ uid: d.id }, d.data())); };
 
   /* ---------- small UI helpers (own overlay, above the game) ---------- */
   function overlay(html) {
@@ -102,11 +102,17 @@
   C.isGuest = () => { if (C.guest) return true; try { return localStorage.getItem('hod-guest') === '1'; } catch (e) { return false; } };
   C.openLeaderboard = async () => {
     if (!C.enabled) return;
-    overlay('<h2>🏆 المتصدّرون</h2><p class="muted">⏳ جاري التحميل…</p>');
+    overlay('<h2>🏆 لوحة الشرف</h2><p class="muted">⏳ جاري التحميل…</p>');
     try {
-      const rows = await C.top();
-      overlay(`<h2>🏆 المتصدّرون</h2><table class="lb"><tr><th>#</th><th>اللاعب</th><th>XP</th><th>🚪</th><th>⭐</th></tr>${rows.map((r, i) => `<tr class="${C.user && r.name === C.displayName() ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(r.name || 'لاعب')}</td><td dir="ltr">${r.xp || 0}</td><td>${r.doors || 0}/8</td><td>${r.stars || 0}</td></tr>`).join('')}</table><div class="row center mt"><button class="btn" id="lb-x">إغلاق</button></div>`);
-    } catch (e) { overlay(`<h2>🏆 المتصدّرون</h2><p class="acct-err">${esc(errAr(e))}</p><div class="row center mt"><button class="btn" id="lb-x">إغلاق</button></div>`); }
+      const all = await C.top(50), me = C.user ? all.findIndex(r => r.uid === C.user.uid) : -1, rows = all.slice(0, 20);
+      const mine = window.hodStats && window.__game ? window.hodStats(window.__game.save) : null;
+      const row = (r, i) => `<tr class="${C.user && r.uid === C.user.uid ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(r.name || 'لاعب')}</td><td dir="ltr"><b>${r.points || 0}</b></td><td>${r.doors || 0}/8</td><td>${r.quizzes || 0}/8</td><td>${r.mid ? '🎓' : '—'}</td></tr>`;
+      overlay(`<h2>🏆 لوحة الشرف</h2>
+        <p class="muted" style="margin:0 0 6px">النقاط 🏅 = نجوم المحاضرات ×100 + أفضل علامة كويز ×10 + الامتحان النصفي (500 + نجومه ×250)</p>
+        ${C.user ? `<p class="lb-me">👤 <b>${esc(C.displayName())}</b> · 🏅 <b dir="ltr">${mine ? mine.points : '—'}</b> · الترتيب: <b>${me >= 0 ? '#' + (me + 1) : 'خارج أفضل 50'}</b></p>` : '<p class="muted">🔐 سجّل الدخول لتظهر في لوحة الشرف</p>'}
+        <div style="max-height:46vh;overflow:auto"><table class="lb"><tr><th>#</th><th>اللاعب</th><th>🏅 نقاط</th><th>🚪</th><th>📝</th><th>🎓</th></tr>${rows.length ? rows.map(row).join('') : '<tr><td colspan="6">لا يوجد لاعبون بعد — كن الأول! 🌟</td></tr>'}</table></div>
+        <div class="row center mt"><button class="btn" id="lb-x">إغلاق</button></div>`);
+    } catch (e) { overlay(`<h2>🏆 لوحة الشرف</h2><p class="acct-err">${esc(errAr(e))}</p><div class="row center mt"><button class="btn" id="lb-x">إغلاق</button></div>`); }
     $('#lb-x').onclick = C.close;
   };
 
