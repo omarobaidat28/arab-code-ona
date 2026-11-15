@@ -6,4 +6,4 @@ window.FIREBASE_CONFIG = {
   appId: "PUT_APP_ID"
 };
 window.SITE_URL = "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/";
-window.APP_VERSION = "3.1.0";
+window.APP_VERSION = "3.1.1";

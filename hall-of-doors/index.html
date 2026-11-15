@@ -349,6 +349,8 @@ table.lb tr.me{background:rgba(242,167,59,.15)}
 .rotate .ph{font-size:64px;animation:rot 1.8s ease-in-out infinite}
 @keyframes rot{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
 @media (orientation:portrait) and (pointer:coarse){ .rotate{display:flex} }
+.xfer{display:grid;gap:8px;margin:6px 0 10px;padding:10px;border:1px dashed var(--torch);border-radius:12px}
+.xfer textarea{width:100%;min-height:70px;font:12px monospace;background:#0e0c18;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;word-break:break-all}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 <canvas id="stage" aria-label="3D house"></canvas><div id="cross" class="cross dot" hidden></div><div id="hud" class="hud" hidden></div><div id="objective" class="objective" hidden></div><div id="qcard" class="qcard2" hidden></div><div id="bossbar" class="bossbar" hidden></div><div id="eye" class="eye" hidden></div><div id="qtoast" class="qtoast" hidden></div><div id="prompt" class="prompt" hidden></div><div id="touch" class="touch" hidden></div><div id="sub" class="sub" hidden></div><div id="dock" class="dock" hidden></div><div id="modal" class="modal" hidden><div id="sheet" class="sheet"></div></div><div id="flash" class="flash"></div><div id="fade" class="fade"></div><div id="fps" hidden style="position:fixed;z-index:70;font:12px monospace;color:#9f9;background:#0008;padding:2px 6px;border-radius:6px"></div><div class="rotate"><div class="ph">📱</div><div style="font-size:20px">دوّر جهازك للوضع الأفقي</div><div class="muted" style="font-size:14px">اللعبة تعمل بالعرض (Landscape) 🔄</div></div><div id="loading" class="loading"><div style="font-family:var(--f-scroll);font-size:44px;color:var(--torch-hi)">قاعة الأبواب</div><div id="loadmsg">⏳ جاري التحميل…</div><div class="loadbar" id="loadbar"><i></i></div></div>
@@ -2576,6 +2578,8 @@ LECTURES.push({
       <div class="set-row"><label>🔊 المؤثرات</label>${seg('s-snd', [['1', 'تشغيل'], ['0', 'كتم']], save.sound ? '1' : '0')}</div>
       <div class="set-row"><label>🎵 الموسيقى</label>${seg('s-mus', [['1', 'تشغيل'], ['0', 'كتم']], save.music ? '1' : '0')}</div>
       <div class="set-row"><label>📈 FPS</label>${seg('s-fps', [['0', 'إخفاء'], ['1', 'إظهار']], s.fps ? '1' : '0')}</div>
+      <div class="set-row"><label>🔑 نقل التقدّم لجهاز آخر</label><span class="row"><button class="btn ghost small" id="s-exp">📤 انسخ رمز تقدّمي</button><button class="btn ghost small" id="s-imp">📥 أدخل رمز تقدّم</button></span></div>
+      <div id="xfer"></div>
       <div class="set-row"><label>🔄 الإصدار <span class="muted" dir="ltr">${esc(window.APP_VERSION || '')}</span></label><button class="btn ghost small" id="s-up">تحقق من التحديثات</button></div>
       <div class="sheet-actions"><button class="btn" id="s-ok">تم ✔</button></div></section>`, 'menu');
     const bindSeg = (id, fn) => $('#' + id).querySelectorAll('button').forEach(b => b.onclick = () => { $('#' + id).querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); fn(b.dataset.v); persist(); });
@@ -2585,6 +2589,16 @@ LECTURES.push({
     $('#s-fov').oninput = e => { s.fov = +e.target.value; $('#sv2').textContent = s.fov + '°'; resize(); persist(); };
     $('#s-ok').onclick = () => { if (G.mode === 'title') renderTitle(); else closeModal(); };
     $('#s-up').onclick = () => window.CLOUD && window.CLOUD.checkUpdate(true);
+    $('#s-exp').onclick = () => { const code = exportCode(); $('#xfer').innerHTML = `<div class="xfer"><p class="hint">احتفظ بهذا الرمز (أرسله لنفسك على واتساب مثلاً)، ثم الصقه على الجهاز الجديد من «📥 أدخل رمز تقدّم».</p><textarea id="xcode" readonly dir="ltr">${code}</textarea><button class="btn small" id="xcopy">📋 نسخ</button></div>`; const ta = $('#xcode'); ta.select(); $('#xcopy').onclick = () => { ta.select(); (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => qToast('✅ تم نسخ الرمز', 'good', 2000)).catch(() => { try { document.execCommand('copy'); qToast('✅ تم نسخ الرمز', 'good', 2000); } catch (e) { qToast('حدّد الرمز وانسخه يدوياً', 'bad', 2500); } }); }; };
+    $('#s-imp').onclick = () => { $('#xfer').innerHTML = `<div class="xfer"><p class="hint">الصق رمز التقدّم هنا (يبدأ بـ HOD1-):</p><textarea id="xin" dir="ltr" placeholder="HOD1-..."></textarea><button class="btn small" id="xgo">✔ استرجع تقدّمي</button><p id="xmsg" class="hint"></p></div>`; $('#xgo').onclick = () => { const r = importCode($('#xin').value); $('#xmsg').textContent = r; }; };
+  }
+  function exportCode() { const s = Object.assign({}, save); delete s.set; const j = JSON.stringify(s); return 'HOD1-' + btoa(unescape(encodeURIComponent(j))); }
+  function importCode(txt) {
+    try { const t = String(txt || '').trim().replace(/\s+/g, ''); if (!t.startsWith('HOD1-')) return '⚠️ الرمز غير صحيح (يجب أن يبدأ بـ HOD1-)';
+      const s = JSON.parse(decodeURIComponent(escape(atob(t.slice(5))))); if (typeof s.unlocked !== 'number') return '⚠️ الرمز غير صالح';
+      const set = save.set; save = Object.assign(blank(), s); save.set = set; persist(); if (!run) { refreshHub(); renderHUD(); }
+      sfx.win(); qToast(`✅ تم استرجاع تقدّمك: Lv ${lvlOf(save.xp)} · 🏆 ${Object.keys(save.stars).length}/8`, 'good', 3500); return '✅ تم! رجع تقدّمك.';
+    } catch (e) { return '⚠️ الرمز ناقص أو تالف — تأكد أنك نسخته كاملاً'; }
   }
   function acctRow() {
     const CL = window.CLOUD; if (!CL || !CL.enabled) return '';
