@@ -19,12 +19,24 @@ public final class Store {
     }
 
     public static Config loadSettings(Context c) {
+        JSONObject o = null;
         try {
             String s = p(c).getString("settings", null);
-            return s == null ? new Config() : Config.fromJson(new JSONObject(s));
-        } catch (Exception e) {
-            return new Config();
+            if (s != null) o = new JSONObject(s);
+        } catch (Exception ignored) {
         }
+        Config cfg = Config.fromJson(o);
+        if (o == null || !o.has("v4")) {
+            // sizes in px depend on the screen: a phone at 3120x1440 needs much bigger circles
+            float d = c.getResources().getDisplayMetrics().density;
+            cfg.wander = Math.round(80 * d);
+            cfg.spread = Math.round(6 * d);
+            cfg.lookRange = Math.round(80 * d);
+            cfg.v4 = 1;
+            saveSettings(c, cfg);
+            HLog.i("settings converted for density " + d + ": wander=" + cfg.wander + " spread=" + cfg.spread);
+        }
+        return cfg;
     }
 
     public static void saveSettings(Context c, Config cfg) {

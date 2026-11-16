@@ -20,6 +20,8 @@ public final class Target {
     public boolean regular;
     /** runtime only: how much the camera has turned to the right (+) or left (-). */
     public double net;
+    /** Joystick / camera stick radius in px (0 = use the default from settings). */
+    public float radius;
 
     public Target(int type, float x, float y, float x2, float y2) {
         this.type = type;
@@ -32,6 +34,7 @@ public final class Target {
     public Target copy() {
         Target t = new Target(type, x, y, x2, y2);
         t.regular = regular;
+        t.radius = radius;
         return t;
     }
 
@@ -43,6 +46,7 @@ public final class Target {
         o.put("x2", x2);
         o.put("y2", y2);
         o.put("r", regular);
+        o.put("rad", radius);
         return o;
     }
 
@@ -50,6 +54,7 @@ public final class Target {
         Target t = new Target(o.optInt("t", TAP), (float) o.optDouble("x", 200), (float) o.optDouble("y", 400),
                 (float) o.optDouble("x2", 400), (float) o.optDouble("y2", 400));
         t.regular = o.optBoolean("r", false);
+        t.radius = (float) o.optDouble("rad", 0);
         return t;
     }
 

@@ -32,13 +32,13 @@ public final class Walker {
     private final ArrayDeque<double[]> q = new ArrayDeque<double[]>(); // {kind(0 point / 1 tremor), x, y, lengthLeft}
     private int[] pending;
 
-    public Walker(Human h, Config c, int screenW, int screenH, boolean regular) {
+    public Walker(Human h, Config c, int screenW, int screenH, boolean regular, double radius) {
         this.h = h;
         this.c = c;
         this.maxX = Math.max(2, screenW - 2);
         this.maxY = Math.max(2, screenH - 2);
         this.regular = regular;
-        this.R = c.wander;
+        this.R = radius > 5 ? radius : c.wander;
         ang = h.u() * Math.PI * 2;
     }
 
@@ -123,11 +123,11 @@ public final class Walker {
         while (left > 0) {
             long chunk = Math.min(left, h.range(250, 800));
             double r = Math.hypot(planX - cx, planY - cy);
-            if (r < R * 0.2) {
+            if (r < R * 0.25) {
                 hold(chunk);
             } else {
                 double a = angleNow() + h.gauss() * 0.07;
-                r = Math.max(R * 0.3, Math.min(R * 1.1, r * (1 + h.gauss() * 0.03)));
+                r = Math.max(R * 0.3, Math.min(R * 1.15, r * (1 + h.gauss() * 0.03)));
                 move(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0, 1);
                 hold(chunk);
             }
@@ -161,6 +161,14 @@ public final class Walker {
         return (s + h.u()) * Math.PI / 4;
     }
 
+    /** How far the stick is pushed: mostly fully (walk / sprint), sometimes half (slow walk). */
+    private double deflect() {
+        double p = h.u();
+        if (p < 0.70) return R * (0.8 + h.u() * 0.3);
+        if (p < 0.95) return R * (0.5 + h.u() * 0.25);
+        return R * (0.3 + h.u() * 0.15);
+    }
+
     private void plan() {
         if (regular) { // steady circle, same every time
             double r = R * 0.7, a0 = 0;
@@ -173,12 +181,12 @@ public final class Walker {
             return;
         }
         double p = h.u();
-        double r = R * (h.chance(20) ? 0.35 + h.u() * 0.2 : 0.6 + h.u() * 0.45);
-        if (p < 0.38) {                 // walk in a direction and keep going
+        double r = deflect();
+        if (p < 0.45) {                 // walk in a direction and keep going
             ang = h.chance(50) ? ang + h.gauss() * 0.6 : pickDirection();
             move(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 25, h.chance(30) ? 1.5 + h.u() * 1.5 : 1);
             steerHold(h.heavy(300, 7000, c.longChance));
-        } else if (p < 0.58) {          // turn around (arc)
+        } else if (p < 0.65) {          // turn around (arc)
             double a0 = Math.hypot(planX - cx, planY - cy) > R * 0.2 ? angleNow() : ang;
             double sweep = (0.5 + h.u() * 3.0) * (h.chance(50) ? 1 : -1);
             move(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, 15, 1);
@@ -191,10 +199,10 @@ public final class Walker {
             }
             ang = a0 + sweep;
             steerHold(h.heavy(200, 3000, c.longChance));
-        } else if (p < 0.68) {          // stop for a moment
+        } else if (p < 0.71) {          // stop for a moment
             move(cx + h.gauss() * 3, cy + h.gauss() * 3, 10, 1);
-            hold(h.heavy(150, 3500, c.longChance));
-        } else if (p < 0.78) {          // zigzag / strafe
+            hold(h.chance(85) ? h.range(100, 900) : h.range(900, 2500));
+        } else if (p < 0.81) {          // zigzag / strafe
             int n = h.range(2, 4);
             double base = ang;
             for (int k = 0; k < n; k++) {

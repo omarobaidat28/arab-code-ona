@@ -25,6 +25,9 @@ public final class Engine implements Runnable {
         int screenW();
 
         int screenH();
+
+        /** A harmless point on our own panel for self tests (nothing there reacts to touches), or null. */
+        int[] safePoint();
     }
 
     public static final int ST_RUN = 0, ST_REST = 1, ST_WAIT = 2;
@@ -61,19 +64,35 @@ public final class Engine implements Runnable {
     @Override
     public void run() {
         String reason = "تم الإيقاف";
+        HLog.verbose = c.logVerbose;
         try {
+            HLog.i("RUN start mode=" + c.mode + " order=" + c.order + " screen=" + host.screenW() + "x" + host.screenH()
+                    + " targets=" + targets.size() + " settings=" + c.toJson());
+            for (int i = 0; i < targets.size(); i++) {
+                Target t = targets.get(i);
+                HLog.i("  target " + (i + 1) + " type=" + t.type + " regular=" + t.regular + " at " + (int) t.x + "," + (int) t.y
+                        + (t.type == Target.SWIPE ? " -> " + (int) t.x2 + "," + (int) t.y2 : "") + " radius=" + (int) radius(t));
+            }
             if (c.startDelaySec > 0) {
                 host.status("يبدأ بعد " + c.startDelaySec + " ث", ST_WAIT);
                 sleep(c.startDelaySec * 1000L);
             }
             startedAt = System.currentTimeMillis();
             if (c.mode == Config.MODE_IMAGE) reason = runImages();
-            else if (c.order == Config.ORDER_TOGETHER) reason = new TogetherRunner(this, targets).run();
+            else if (c.order == Config.ORDER_TOGETHER) {
+                boolean needHold = false;
+                for (Target t : targets) if (t.type == Target.HOLD) needHold = true;
+                Boolean cont = needHold ? selfTestContinue() : Boolean.TRUE;
+                if (cont == null) reason = "الإيماءات لا تعمل على هذا الجهاز (انظر السجل)";
+                else if (running) reason = new TogetherRunner(this, targets, cont).run();
+            }
             else reason = runTargets();
         } catch (Throwable t) {
-            reason = "خطأ: " + t.getMessage();
+            reason = "خطأ: " + t;
+            HLog.e("engine crashed", t);
         }
         running = false;
+        HLog.i("RUN end: " + reason + " actions=" + actions);
         host.stopped(reason);
     }
 
@@ -260,6 +279,7 @@ public final class Engine implements Runnable {
 
     /** Camera turn: short drag mostly left / right (balanced so it doesn't spin one way), rarely up / down. */
     PathBuilder buildLook(Target t) {
+        if (c.lookStyle == 0) return buildStickLook(t);
         float[] a = t.regular ? new float[]{t.x, t.y} : h.jitter(t.x, t.y, c.spread * 0.5f);
         long dur = t.regular ? (c.lookMin + c.lookMax) / 2 : (long) h.between(c.lookMin, c.lookMax);
         if (!t.regular && h.chance(15)) dur = (long) (c.lookMin + (dur - c.lookMin) * 0.3); // quick flick
@@ -289,6 +309,101 @@ public final class Engine implements Runnable {
         return pb;
     }
 
+    /**
+     * Right stick (camera): touch the stick, push it left or right, HOLD for 0.25-1 s so the view
+     * keeps turning, then let go. Left/right are balanced over time; up/down is rare.
+     */
+    PathBuilder buildStickLook(Target t) {
+        double R = radius(t);
+        float[] a = t.regular ? new float[]{t.x, t.y} : h.jitter(t.x, t.y, c.spread * 0.3f);
+        long hold = t.regular ? (c.lookMin + c.lookMax) / 2 : (long) h.between(c.lookMin, c.lookMax);
+        if (!t.regular && h.chance(15)) hold = (long) (c.lookMin + (hold - c.lookMin) * 0.3); // quick flick
+        boolean right;
+        if (t.regular) right = t.net <= 0;
+        else right = h.u() < 0.5 - 0.4 * Math.tanh(t.net / (c.lookMax * 2.0));
+        double ang = right ? 0 : Math.PI;
+        if (!t.regular) ang += h.gauss() * 0.08;                         // never perfectly level
+        if (!t.regular && h.chance(c.lookVertChance)) ang = (h.chance(50) ? -1 : 1) * Math.PI / 2 + h.gauss() * 0.15;
+        double defl = t.regular ? R * 0.9 : R * (h.chance(20) ? 0.5 + h.u() * 0.25 : 0.8 + h.u() * 0.3);
+        if (Math.abs(Math.cos(ang)) > 0.5) t.net += (right ? 1 : -1) * hold;
+        long land = t.regular ? 25 : h.range(15, 45);
+        long push = t.regular ? 70 : h.range(45, 120);
+        boolean slideBack = !t.regular && h.chance(30);
+        double v = defl / push;
+        PathBuilder pb = new PathBuilder(h, host.screenW(), host.screenH(), v);
+        pb.start(a[0], a[1]);
+        pb.dwell(land);
+        double tx = a[0] + Math.cos(ang) * defl, ty = a[1] + Math.sin(ang) * defl;
+        if (t.regular) pb.lineTo(tx, ty);
+        else pb.curveTo(tx, ty, 6);
+        long back = slideBack ? push : 0;
+        pb.dwell(Math.max(10, hold - push - land - back));
+        if (slideBack) pb.curveTo(a[0], a[1], 6);
+        pb.fixedMs = Math.round(pb.timeMs());
+        return pb;
+    }
+
+    float radius(Target t) {
+        return t.radius > 5 ? t.radius : c.wander;
+    }
+
+    /**
+     * Checks on our own panel (harmless) whether this phone can keep a finger down across two
+     * gestures (continued strokes). Returns TRUE / FALSE, or null if gestures don't work at all.
+     */
+    Boolean selfTestContinue() {
+        int[] p = host.safePoint();
+        if (p == null) {
+            HLog.w("self test skipped: no safe point");
+            return Boolean.TRUE;
+        }
+        int x = p[0], y = p[1];
+        try {
+            Path a = new Path();
+            a.moveTo(x, y);
+            a.lineTo(x + 1, y + 1);
+            a.lineTo(x + 3, y);
+            GestureDescription.StrokeDescription s1 = new GestureDescription.StrokeDescription(a, 0, 150, true);
+            long t0 = System.currentTimeMillis();
+            boolean ok1 = host.gesture(new GestureDescription.Builder().addStroke(s1).build(), 150);
+            long t1 = System.currentTimeMillis();
+            if (!ok1) {
+                HLog.w("self test: a simple gesture failed (" + (t1 - t0) + " ms). Gestures may be blocked.");
+                // try once more without continuation to tell 'blocked' from 'no continuation'
+                Path q = new Path();
+                q.moveTo(x, y);
+                boolean plain = host.gesture(new GestureDescription.Builder()
+                        .addStroke(new GestureDescription.StrokeDescription(q, 0, 60)).build(), 60);
+                HLog.w("self test: plain tap -> " + plain);
+                return plain ? Boolean.FALSE : null;
+            }
+            Path b = new Path();
+            b.moveTo(x + 3, y);
+            b.lineTo(x + 2, y + 2);
+            b.lineTo(x, y);
+            GestureDescription.StrokeDescription s2 = s1.continueStroke(b, 0, 150, true);
+            boolean ok2 = host.gesture(new GestureDescription.Builder().addStroke(s2).build(), 150);
+            long t2 = System.currentTimeMillis();
+            Path cpath = new Path();
+            cpath.moveTo(x, y);
+            boolean ok3 = host.gesture(new GestureDescription.Builder()
+                    .addStroke(s2.continueStroke(cpath, 0, 40, false)).build(), 40);
+            long t3 = System.currentTimeMillis();
+            HLog.i("self test: hold=" + ok1 + "(" + (t1 - t0) + "ms) continue=" + ok2 + "(" + (t2 - t1) + "ms) release="
+                    + ok3 + "(" + (t3 - t2) + "ms) -> continuous hold " + (ok2 && ok3 ? "SUPPORTED" : "NOT supported"));
+            if (!(ok2 && ok3)) {
+                // make sure nothing stays pressed
+                Path r = new Path();
+                r.moveTo(x, y);
+                host.gesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription(r, 0, 20)).build(), 20);
+            }
+            return ok2 && ok3;
+        } catch (Throwable e) {
+            HLog.e("self test exception", e);
+            return Boolean.FALSE;
+        }
+    }
+
     /** How long the joystick finger stays down: mostly a few seconds, sometimes up to holdMax
      *  (about a minute), rarely a bit longer than that. */
     long walkDuration() {
@@ -302,7 +417,7 @@ public final class Engine implements Runnable {
     private boolean hold(Target t) {
         float[] cc = h.jitter(t.x, t.y, c.spread * 0.3f);
         long total = Math.min(MAX_GESTURE - 1000, walkDuration());
-        Walker w = new Walker(h, c, host.screenW(), host.screenH(), false);
+        Walker w = new Walker(h, c, host.screenW(), host.screenH(), false, radius(t));
         w.startSession(cc[0], cc[1]);
         Path p = new Path();
         p.moveTo(w.px, w.py);
@@ -324,7 +439,7 @@ public final class Engine implements Runnable {
             // steady full circle around the center, same every time
             PathBuilder pb = new PathBuilder(h, W, H, 1);
             pb.start(t.x, t.y);
-            double r = c.wander * 0.7;
+            double r = radius(t) * 0.9;
             pb.lineTo(t.x + r, t.y);
             for (int i = 1; i <= 72; i++) {
                 double a = Math.PI * 2 * i / 72;

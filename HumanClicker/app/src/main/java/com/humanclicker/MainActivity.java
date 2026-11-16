@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        HLog.init(this);
         if (Build.VERSION.SDK_INT >= 21) getWindow().setStatusBarColor(BG);
         build();
     }
@@ -150,17 +151,21 @@ public final class MainActivity extends Activity {
         num(sw, "swipeHoldChance", "احتمال إبقاء الإصبع بعد السحب (%)");
         num(sw, "swipeHoldMax", "أقصى مدة إبقاء بعد السحب (ms)");
         pair(sw, "holdMin", "holdMax", "مدة المشي بالجويستيك (ms) — 60000 = دقيقة");
-        num(sw, "wander", "نصف قطر حركة الجويستيك (px)");
+        num(sw, "wander", "حجم الدائرة الافتراضي للأهداف الجديدة (px)");
+        sw.addView(text("⚠ مهم: الدائرة المتقطعة حول الجويستيك لازم تكون بحجم عصا اللعبة. اضغط مطولاً على الهدف ← ⊕ / ⊖ لتكبيرها أو تصغيرها.", 12, 0xFFFFCC80));
         num(sw, "longChance", "احتمال مشي طويل (%) — قريب من الدقيقة");
         num(sw, "rareLongChance", "احتمال نادر لمشي أطول من دقيقة (%)");
         sw.addView(text("🕹 الجويستيك: يمشي بكل الاتجاهات بالتساوي (يتذكر الجهات التي مشى فيها ويروح للجهات الأقل)، يعدّل اتجاهه شوي شوي مثل الإنسان، يلف، يتوقف، يتعرج يمين ويسار. غالباً المشي ثواني، أحياناً قرب الدقيقة، ونادراً أكثر من دقيقة.", 12, SUB));
 
-        LinearLayout lk = card("جويستيك اللف ↔ (الكاميرا)");
+        LinearLayout lk = card("القير اليمين ↻ (اللف / الكاميرا)");
+        radio(lk, "lookStyle", new String[]{
+                "عصا (جويستيك): يدفع العصا يمين/يسار ويثبت ثم يترك (مستحسن)",
+                "سحب على الشاشة: يسحب الإصبع ويرفعه"});
         pair(lk, "lookMin", "lookMax", "مدة اللفة (ms) — 250 إلى 1000 = ربع ثانية لثانية");
-        num(lk, "lookRange", "أقصى مسافة سحب للف (px)");
+        num(lk, "lookRange", "مسافة السحب (لنوع السحب فقط) (px)");
         num(lk, "lookVertChance", "احتمال نادر للف فوق/تحت (%)");
         pair(lk, "lookGapMin", "lookGapMax", "الانتظار بين اللفات (ms)");
-        lk.addView(text("↔ ضعه على مكان الكاميرا في اللعبة (الجهة اليمين عادة). يلف يمين ويسار بالتناوب العشوائي بدون ما يدور لجهة وحدة دائماً، ونادراً فوق أو تحت.", 12, SUB));
+        lk.addView(text("↻ ضعه على العصا اليمين في اللعبة. يدفعها يمين أو يسار (بالتناوب العشوائي بدون ما يدور لجهة وحدة دائماً) ويثبت من ربع ثانية لثانية، ونادراً فوق أو تحت.", 12, SUB));
 
         LinearLayout sp = card("الإيقاف التلقائي");
         num(sp, "cycles", "عدد الدورات (0 = بلا نهاية)");
@@ -214,6 +219,47 @@ public final class MainActivity extends Activity {
         profilesBox = new LinearLayout(this);
         profilesBox.setOrientation(LinearLayout.VERTICAL);
         pr.addView(profilesBox);
+
+        // ---------------- log
+        LinearLayout lg = card("السجل (Log) 📝");
+        check(lg, "logVerbose", "سجل مفصل (كل حركة) — مفيد لتصليح المشاكل");
+        check(lg, "collapseWhileRunning", "تصغير اللوحة أثناء التشغيل");
+        lg.addView(text("إذا في مشكلة: شغّل التطبيق دقيقة، أوقفه، ثم اضغط (مشاركة السجل) وابعته.", 12, SUB));
+        Button showLog = button("عرض السجل");
+        showLog.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                showLogDialog();
+            }
+        });
+        lg.addView(showLog);
+        Button shareLog = button("مشاركة السجل");
+        shareLog.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType("text/plain");
+                i.putExtra(Intent.EXTRA_SUBJECT, "Human Clicker log");
+                i.putExtra(Intent.EXTRA_TEXT, deviceHeader() + HLog.tail(90000));
+                startActivity(Intent.createChooser(i, "مشاركة السجل"));
+            }
+        });
+        lg.addView(shareLog);
+        Button copyLog = button("نسخ السجل");
+        copyLog.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("log", deviceHeader() + HLog.tail(90000)));
+                toast("تم النسخ");
+            }
+        });
+        lg.addView(copyLog);
+        Button clearLog = button("مسح السجل");
+        clearLog.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                HLog.clear();
+                toast("تم المسح");
+            }
+        });
+        lg.addView(clearLog);
 
         // ---------------- help
         LinearLayout hp = card("طريقة الاستخدام");
@@ -384,6 +430,37 @@ public final class MainActivity extends Activity {
     }
 
     // ============================================================ dynamic parts
+
+    private String deviceHeader() {
+        String v = "?";
+        try {
+            v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception ignored) {
+        }
+        return "Human Clicker " + v + " | " + Build.MANUFACTURER + " " + Build.MODEL + " | Android " + Build.VERSION.RELEASE
+                + " (sdk " + Build.VERSION.SDK_INT + ")\nsettings: " + Store.loadSettings(this).toJson() + "\ntargets: "
+                + Target.listToJson(Store.loadTargets(this)) + "\n\n";
+    }
+
+    private void showLogDialog() {
+        ScrollView sv = new ScrollView(this);
+        TextView tv = new TextView(this);
+        tv.setText(HLog.tail(40000));
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setTextColor(TEXT);
+        tv.setTextIsSelectable(true);
+        tv.setTextDirection(View.TEXT_DIRECTION_LTR);
+        tv.setPadding(dp(8), dp(8), dp(8), dp(8));
+        sv.addView(tv);
+        final ScrollView fsv = sv;
+        sv.post(new Runnable() {
+            public void run() {
+                fsv.fullScroll(View.FOCUS_DOWN);
+            }
+        });
+        new AlertDialog.Builder(this).setTitle("السجل").setView(sv).setPositiveButton("إغلاق", null).show();
+    }
 
     private void refreshStatus() {
         if (statusText == null) return;

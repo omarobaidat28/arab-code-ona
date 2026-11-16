@@ -24,6 +24,7 @@ final class TogetherRunner {
     private int quickFails = 0;
     private long T0 = 0;   // virtual time (ms) of the start of the current window
     private int actions = 0;
+    private int windowNo = 0;
 
     private static final class Lane {
         Target t;
@@ -38,7 +39,7 @@ final class TogetherRunner {
         StrokeDescription open;
     }
 
-    TogetherRunner(Engine e, List<Target> targets) {
+    TogetherRunner(Engine e, List<Target> targets, boolean continueOk) {
         this.e = e;
         this.host = e.host;
         this.c = e.c;
@@ -49,12 +50,14 @@ final class TogetherRunner {
         } catch (Throwable ignored) {
         }
         maxStrokes = Math.max(4, Math.min(20, ms));
+        allowContinue = continueOk;
+        HLog.i("together: maxStrokes=" + maxStrokes + " continuousHold=" + allowContinue);
         for (Target t : targets) {
             Lane l = new Lane();
             l.t = t;
             l.nextFree = h.range(0, 1200);                 // fingers don't all start together
             l.tempo = t.regular ? 1 : 0.8 + h.u() * 0.45;  // each finger has its own speed
-            if (t.type == Target.HOLD) l.walker = new Walker(h, c, host.screenW(), host.screenH(), t.regular);
+            if (t.type == Target.HOLD) l.walker = new Walker(h, c, host.screenW(), host.screenH(), t.regular, e.radius(t));
             lanes.add(l);
         }
     }
@@ -74,7 +77,8 @@ final class TogetherRunner {
                 reason = "انتهى الوقت";
                 break;
             }
-            long len = h.range(2500, 7000);
+            // without continuous hold a window must be long, otherwise the walk restarts too often
+            long len = allowContinue ? h.range(2500, 7000) : h.range(12000, 25000);
             if (h.chance(c.restChance * len / 10000.0)) { // the whole hand takes a break
                 liftAll();
                 long rest = (long) (h.between(c.restMinSec, c.restMaxSec) * 1000);
@@ -126,6 +130,10 @@ final class TogetherRunner {
                 }
             }
             if (strokes.size() + paths.size() > budget) {
+                if (!allowContinue) {       // keep the walk going; this finger waits
+                    deferred.add(best);
+                    continue;
+                }
                 end = Math.max(maxEnd, start);
                 break;
             }
@@ -154,6 +162,7 @@ final class TogetherRunner {
                         break;
                     }
                     l.sessEnd = l.sessStart + sessionLength(l);
+                    HLog.v("walk start target " + (lanes.indexOf(l) + 1) + " for " + (l.sessEnd - l.sessStart) + "ms");
                     float[] cc = l.t.regular ? new float[]{l.t.x, l.t.y} : h.jitter(l.t.x, l.t.y, c.spread * 0.3f);
                     l.walker.startSession(cc[0], cc[1]);
                     l.open = null;
@@ -205,6 +214,20 @@ final class TogetherRunner {
             ok = false;
         }
         long took = System.currentTimeMillis() - t0;
+        windowNo++;
+        if (HLog.verbose || !ok) {
+            int taps = 0, holds = 0, conts = 0;
+            for (StrokeDescription sd : strokes) {
+                if (sd.getDuration() > 1500) holds++;
+                else taps++;
+                if (sd.willContinue()) conts++;
+            }
+            String line = "W" + windowNo + " len=" + (end - T0) + "ms strokes=" + strokes.size() + " (short=" + taps
+                    + " long=" + holds + ") keepDown=" + conts + " continuing=" + hasContinue + " -> "
+                    + (ok ? "OK" : "CANCELLED") + " in " + took + "ms";
+            if (ok) HLog.v(line);
+            else HLog.w(line + (took < 200 ? " (rejected immediately)" : " (interrupted, e.g. screen touched)"));
+        }
         T0 = end;
         if (ok) {
             quickFails = 0;
@@ -212,6 +235,7 @@ final class TogetherRunner {
             // interrupted (e.g. you touched the screen) -> fingers are up now
             if (hasContinue && took < 200 && ++quickFails >= 3 && allowContinue) {
                 allowContinue = false;
+                HLog.w("continuous hold disabled after 3 immediate rejections");
                 host.status("بدون إمساك متواصل", Engine.ST_RUN);
             }
             for (Lane l : lanes) {

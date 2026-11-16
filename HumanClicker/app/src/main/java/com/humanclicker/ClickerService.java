@@ -82,22 +82,47 @@ public final class ClickerService extends AccessibilityService implements Engine
         super.onServiceConnected();
         instance = this;
         wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+        HLog.init(this);
+        int[] ss = screenSize();
+        HLog.i("SERVICE connected. device=" + Build.MANUFACTURER + " " + Build.MODEL + " android=" + Build.VERSION.RELEASE
+                + " sdk=" + Build.VERSION.SDK_INT + " screen=" + ss[0] + "x" + ss[1]
+                + " density=" + getResources().getDisplayMetrics().density + " app=" + appVersion());
         if (Store.getFlag(this, "showOnConnect")) {
             Store.setFlag(this, "showOnConnect", false);
             showPanel();
         }
     }
 
+    private String lastPkg = "";
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        try {
+            CharSequence pk = event.getPackageName();
+            if (pk != null && !pk.toString().equals(lastPkg) && !pk.toString().equals(getPackageName())) {
+                lastPkg = pk.toString();
+                HLog.i("app on screen: " + lastPkg);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
     public void onInterrupt() {
+        HLog.w("service interrupted");
+    }
+
+    private String appVersion() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
+        HLog.w("service unbound (accessibility turned off?)");
         hidePanel();
         instance = null;
         return super.onUnbind(intent);
@@ -268,7 +293,7 @@ public final class ClickerService extends AccessibilityService implements Engine
                 addNew(Target.HOLD);
             }
         });
-        TextView addLook = button("↔", 0xFF00838F);
+        TextView addLook = button("↻", 0xFF00838F);
         addLook.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 addNew(Target.LOOK);
@@ -465,6 +490,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         float cx = ss[0] / 2f + (markers.size() % 4) * dp(24) - dp(36);
         float cy = ss[1] / 2f + (markers.size() / 4 % 4) * dp(24) - dp(36);
         Target t = new Target(type, cx, cy, cx + dp(150), cy);
+        if (type == Target.HOLD || type == Target.LOOK) t.radius = cfg.wander;
         if (type == Target.SWIPE) {
             t.x = cx - dp(75);
             t.x2 = cx + dp(75);
@@ -478,6 +504,10 @@ public final class ClickerService extends AccessibilityService implements Engine
         // keep the panel above the new marker
         safeRemove(panel);
         wm.addView(panel, panelLp);
+    }
+
+    float rad(Marker m) {
+        return m.t.radius > 5 ? m.t.radius : cfg.wander;
     }
 
     private void addMarker(Target t) {
@@ -529,7 +559,7 @@ public final class ClickerService extends AccessibilityService implements Engine
             Marker m = markers.get(i);
             String n = (m.t.regular ? "📌" : "") + (i + 1);
             if (m.t.type == Target.HOLD) m.a.setText("🕹" + n);
-            else if (m.t.type == Target.LOOK) m.a.setText("↔" + n);
+            else if (m.t.type == Target.LOOK) m.a.setText("↻" + n);
             else m.a.setText(n);
             if (m.b != null) m.b.setText(n + "▸");
         }
@@ -691,6 +721,22 @@ public final class ClickerService extends AccessibilityService implements Engine
             }
         });
         box.addView(toggle);
+        if (m.t.type == Target.HOLD || m.t.type == Target.LOOK) {
+            TextView bigger = menuItem("⊕ دائرة أكبر", 0xFF2E7D32);
+            bigger.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    resize(m, 1.12f);
+                }
+            });
+            box.addView(bigger);
+            TextView smaller = menuItem("⊖ دائرة أصغر", 0xFF1565C0);
+            smaller.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    resize(m, 1 / 1.12f);
+                }
+            });
+            box.addView(smaller);
+        }
         TextView del = menuItem("🗑 حذف", 0xFFB71C1C);
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -713,6 +759,17 @@ public final class ClickerService extends AccessibilityService implements Engine
         lp.y = Math.max(0, Math.min(ss[1] - dp(200), m.la.y));
         markerMenu = box;
         wm.addView(box, lp);
+    }
+
+    /** Make the dashed circle match the game's stick: the finger pushes up to this distance. */
+    private void resize(Marker m, float f) {
+        float r = rad(m) * f;
+        r = Math.max(dp(15), Math.min(dp(300), r));
+        m.t.radius = r;
+        saveTargets();
+        if (lines != null) lines.invalidate();
+        HLog.i("target " + (markers.indexOf(m) + 1) + " radius -> " + (int) r + "px");
+        toast("حجم الدائرة: " + (int) r + " px — خليها بحجم عصا اللعبة");
     }
 
     private void toggleRegular(Marker m) {
@@ -790,9 +847,10 @@ public final class ClickerService extends AccessibilityService implements Engine
                     c.drawLine(ex, ey, (float) (ex - Math.cos(ang - 0.5) * al), (float) (ey - Math.sin(ang - 0.5) * al), line);
                     c.drawLine(ex, ey, (float) (ex - Math.cos(ang + 0.5) * al), (float) (ey - Math.sin(ang + 0.5) * al), line);
                 } else if (m.t.type == Target.HOLD) {
-                    c.drawCircle(ax, ay, s.cfg.wander, ring);
+                    c.drawCircle(ax, ay, s.rad(m), ring);
                 } else if (m.t.type == Target.LOOK) {
-                    float r = s.cfg.lookRange, al = s.dp(12);
+                    float r = s.cfg.lookStyle == 0 ? s.rad(m) : s.cfg.lookRange, al = s.dp(12);
+                    if (s.cfg.lookStyle == 0) c.drawCircle(ax, ay, r, ring);
                     c.drawLine(ax - r, ay, ax + r, ay, ring);
                     c.drawLine(ax - r, ay, ax - r + al, ay - al * 0.7f, ring);
                     c.drawLine(ax - r, ay, ax - r + al, ay + al * 0.7f, ring);
@@ -845,26 +903,32 @@ public final class ClickerService extends AccessibilityService implements Engine
             saveTargets();
             rt = runtimeTargets();
             if (rt.isEmpty()) {
-                toast("أضف هدفاً أولاً (＋ ⇆ 🕹 ↔)");
+                toast("أضف هدفاً أولاً (＋ ⇆ 🕹 ↻)");
                 return;
             }
         }
         setMarkersTouchable(false);
         final int g = ++gen;
         fails = 0;
-        engine = new Engine(new RunHost(g), cfg, rt, tmpl);
+        int[] sl = new int[2];
+        statusView.getLocationOnScreen(sl);
+        int[] safe = statusView.getWidth() > 0 ? new int[]{sl[0] + statusView.getWidth() / 2, sl[1] + statusView.getHeight() / 2} : null;
+        HLog.i("start pressed: screen=" + sw + "x" + sh + " rotation=" + rotation() + " panel=" + panelLp.x + "," + panelLp.y
+                + " safePoint=" + (safe == null ? "none" : safe[0] + "," + safe[1]));
+        for (int i = 0; i < markers.size(); i++) {
+            Marker mk = markers.get(i);
+            HLog.v("  marker " + (i + 1) + " overlay=" + (mk.la.x + markerSize() / 2) + "," + (mk.la.y + markerSize() / 2));
+        }
+        engine = new Engine(new RunHost(g, safe), cfg, rt, tmpl);
         engineThread = new Thread(engine, "human-engine");
         engineThread.setPriority(Thread.NORM_PRIORITY + 1);
         engineThread.start();
         updatePlay(true, Engine.ST_WAIT);
-        // small panel, moved away from every target so the automation can never press it
         savedCollapsed = collapsed;
-        savedX = panelLp.x;
-        savedY = panelLp.y;
-        setCollapsed(true);
+        if (cfg.collapseWhileRunning) setCollapsed(true);
         main.post(new Runnable() {
             public void run() {
-                if (g == gen) movePanelAwayFromTargets();
+                if (g == gen) warnIfPanelInTheWay();
             }
         });
     }
@@ -887,12 +951,6 @@ public final class ClickerService extends AccessibilityService implements Engine
         updatePlay(false, ST_IDLE);
         if (statusView != null) statusView.setText(cfg.mode == Config.MODE_IMAGE ? "صورة" : "نقر");
         if (panel != null) {
-            panelLp.x = savedX;
-            panelLp.y = savedY;
-            try {
-                wm.updateViewLayout(panel, panelLp);
-            } catch (Exception ignored) {
-            }
             setCollapsed(savedCollapsed);
             toast(reason + (fails > 0 ? " (" + fails + " حركة انقطعت)" : ""));
         }
@@ -906,12 +964,12 @@ public final class ClickerService extends AccessibilityService implements Engine
         Rect out;
         switch (m.t.type) {
             case Target.HOLD:
-                r = (int) (cfg.wander * 1.4f + cfg.spread);
+                r = (int) (rad(m) * 1.4f + cfg.spread);
                 out = new Rect(x - r, y - r, x + r, y + r);
                 break;
             case Target.LOOK:
-                r = cfg.lookRange + cfg.spread + half;
-                out = new Rect(x - r, y - r / 2, x + r, y + r / 2);
+                r = (int) (cfg.lookStyle == 0 ? rad(m) * 1.2f + cfg.spread : cfg.lookRange + cfg.spread + half);
+                out = new Rect(x - r, y - r, x + r, y + r);
                 break;
             case Target.SWIPE: {
                 int x2 = m.lb.x + half, y2 = m.lb.y + half, e = (int) (cfg.spread * 1.8f) + half;
@@ -925,55 +983,48 @@ public final class ClickerService extends AccessibilityService implements Engine
         return out;
     }
 
-    private void movePanelAwayFromTargets() {
-        if (panel == null) return;
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-        int pw = panel.getMeasuredWidth(), ph = panel.getMeasuredHeight();
-        int[] ss = screenSize();
-        int m = dp(6);
-        int[][] cand = {
-                {panelLp.x, panelLp.y},
-                {(ss[0] - pw) / 2, m}, {m, m}, {ss[0] - pw - m, m},
-                {m, (ss[1] - ph) / 2}, {ss[0] - pw - m, (ss[1] - ph) / 2},
-                {(ss[0] - pw) / 2, ss[1] - ph - m}, {m, ss[1] - ph - m}, {ss[0] - pw - m, ss[1] - ph - m}};
-        List<Rect> areas = new ArrayList<Rect>();
-        if (cfg.mode != Config.MODE_IMAGE) for (Marker mk : markers) areas.add(reach(mk));
-        int bestI = 0;
-        long bestOverlap = Long.MAX_VALUE;
-        for (int i = 0; i < cand.length; i++) {
-            Rect pr = new Rect(cand[i][0], cand[i][1], cand[i][0] + pw, cand[i][1] + ph);
-            long ov = 0;
-            for (Rect a : areas) {
-                Rect x = new Rect(pr);
-                if (x.intersect(a)) ov += (long) x.width() * x.height();
-            }
-            if (ov < bestOverlap) {
-                bestOverlap = ov;
-                bestI = i;
-                if (ov == 0) break;
+    /** The automatic fingers would press the panel if it lies inside a target's area: warn. */
+    private void warnIfPanelInTheWay() {
+        if (panel == null || cfg.mode == Config.MODE_IMAGE) return;
+        Rect pr = new Rect(panelLp.x, panelLp.y, panelLp.x + panel.getWidth(), panelLp.y + panel.getHeight());
+        for (int i = 0; i < markers.size(); i++) {
+            Rect a = reach(markers.get(i));
+            if (Rect.intersects(pr, a)) {
+                HLog.w("panel overlaps target " + (i + 1) + " area " + a.toShortString() + " panel " + pr.toShortString());
+                toast("⚠ اللوحة داخل منطقة الهدف " + (i + 1) + " — حركها لمكان فاضي");
+                return;
             }
         }
-        panelLp.x = cand[bestI][0];
-        panelLp.y = cand[bestI][1];
+    }
+
+    private int rotation() {
         try {
-            wm.updateViewLayout(panel, panelLp);
-        } catch (Exception ignored) {
+            return ((android.hardware.display.DisplayManager) getSystemService(Context.DISPLAY_SERVICE))
+                    .getDisplay(Display.DEFAULT_DISPLAY).getRotation();
+        } catch (Exception e) {
+            return -1;
         }
-        if (bestOverlap > 0) toast("⚠ اللوحة قريبة من الأهداف، حركها لمكان فاضي");
     }
 
     /** Host given to each run; once a newer run starts, the old one is cut off completely. */
     private final class RunHost implements Engine.Host {
         final int g;
+        final int[] safe;
 
-        RunHost(int g) {
+        RunHost(int g, int[] safe) {
             this.g = g;
+            this.safe = safe;
+        }
+
+        public int[] safePoint() {
+            return safe;
         }
 
         public boolean gesture(GestureDescription d, long timeoutMs) {
             if (g != gen) return false;
             boolean ok = ClickerService.this.gesture(d, timeoutMs);
             if (!ok && g == gen) fails++;
+            if (!ok && cfg.order != Config.ORDER_TOGETHER) HLog.w("gesture cancelled (" + d.getStrokeCount() + " strokes)");
             return ok;
         }
 
@@ -1132,6 +1183,11 @@ public final class ClickerService extends AccessibilityService implements Engine
     @Override
     public int screenH() {
         return sh;
+    }
+
+    @Override
+    public int[] safePoint() {
+        return null;
     }
 
     // ================================================================ image capture

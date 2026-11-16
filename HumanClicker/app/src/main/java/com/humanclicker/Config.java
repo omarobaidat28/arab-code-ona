@@ -55,8 +55,14 @@ public final class Config {
     public int lookMax = 1000;           // ms
     public int lookRange = 220;          // px max drag distance
     public int lookVertChance = 8;       // % rare up/down
+    public int lookStyle = 0;            // 0 = right stick (push & hold), 1 = drag on the screen
     public int lookGapMin = 300;         // ms between two turns
     public int lookGapMax = 2200;
+
+    // Misc
+    public boolean logVerbose = true;
+    public boolean collapseWhileRunning = true;
+    public int v4 = 1;                   // marker: settings already converted for the screen density
 
     // Stop conditions
     public int cycles = 0;               // 0 = infinite (in image mode: number of clicks)
@@ -131,6 +137,7 @@ public final class Config {
         c.lookMax = clamp(Math.max(c.lookMin, c.lookMax), 60, 10000);
         c.lookRange = clamp(c.lookRange, 10, 3000);
         c.lookVertChance = clamp(c.lookVertChance, 0, 100);
+        c.lookStyle = clamp(c.lookStyle, 0, 1);
         c.lookGapMin = clamp(c.lookGapMin, 0, 60000);
         c.lookGapMax = clamp(Math.max(c.lookGapMin, c.lookGapMax), 0, 60000);
         c.cycles = Math.max(0, c.cycles);
