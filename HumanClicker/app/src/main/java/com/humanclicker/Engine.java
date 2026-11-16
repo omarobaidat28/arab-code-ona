@@ -116,6 +116,30 @@ public final class Engine implements Runnable {
         }
     }
 
+    /** Order for one round. Regular targets keep their fixed slot; only the others are randomized. */
+    private int[] roundOrder() {
+        int n = targets.size();
+        List<Integer> free = new ArrayList<Integer>();
+        for (int i = 0; i < n; i++) if (!targets.get(i).regular) free.add(i);
+        int m = free.size();
+        if (m == n) return nextOrder(n);
+        int[] rnd = m == 0 ? new int[0] : nextOrder(m);
+        List<Integer> out = new ArrayList<Integer>();
+        int k = 0;
+        for (int i = 0; i < n; i++) {
+            if (targets.get(i).regular) {
+                out.add(i);
+            } else {
+                int from = k * rnd.length / m, to = (k + 1) * rnd.length / m;
+                for (int j = from; j < to; j++) out.add(free.get(rnd[j]));
+                k++;
+            }
+        }
+        int[] o = new int[out.size()];
+        for (int i = 0; i < o.length; i++) o[i] = out.get(i);
+        return o;
+    }
+
     private int[] nextOrder(int n) {
         int[] o;
         switch (c.order) {
@@ -265,7 +289,41 @@ public final class Engine implements Runnable {
         return dispatch(pb.path, pb.durationMs());
     }
 
+    // ---------------- regular (منتظم): exact point, fixed durations, no randomness
+
+    private void regular(Target t) {
+        int W = host.screenW(), H = host.screenH();
+        if (t.type == Target.SWIPE) {
+            long dur = (c.swipeMin + c.swipeMax) / 2;
+            PathBuilder pb = new PathBuilder(h, W, H, 1);
+            pb.start(t.x, t.y);
+            pb.lineTo(t.x2, t.y2);
+            dispatch(pb.path, dur);
+        } else if (t.type == Target.HOLD) {
+            // steady full circle around the center, same every time
+            PathBuilder pb = new PathBuilder(h, W, H, 1);
+            pb.start(t.x, t.y);
+            double r = c.wander * 0.7;
+            pb.lineTo(t.x + r, t.y);
+            for (int i = 1; i <= 72; i++) {
+                double a = Math.PI * 2 * i / 72;
+                pb.lineTo(t.x + Math.cos(a) * r, t.y + Math.sin(a) * r);
+            }
+            dispatch(pb.path, Math.min(MAX_GESTURE, (c.holdMin + c.holdMax) / 2));
+        } else {
+            Path p = new Path();
+            p.moveTo(t.x, t.y);
+            dispatch(p, (c.pressMin + c.pressMax) / 2);
+        }
+    }
+
     private void perform(Target t) {
+        if (t.regular) {
+            regular(t);
+            actions++;
+            host.status(String.valueOf(actions), ST_RUN);
+            return;
+        }
         switch (t.type) {
             case Target.SWIPE:
                 swipe(t);
@@ -289,12 +347,14 @@ public final class Engine implements Runnable {
         while (running) {
             if (c.cycles > 0 && cycle >= c.cycles) return "اكتملت " + cycle + " دورة";
             if (timeUp()) return "انتهى الوقت";
-            int[] order = nextOrder(targets.size());
+            int[] order = roundOrder();
             for (int idx : order) {
                 if (!running) break;
-                perform(targets.get(idx));
+                Target t = targets.get(idx);
+                perform(t);
                 if (!running) break;
-                humanPause();
+                if (t.regular) sleep((c.intervalMin + c.intervalMax) / 2);
+                else humanPause();
                 if (timeUp()) break;
             }
             cycle++;

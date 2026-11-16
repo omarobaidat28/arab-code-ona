@@ -50,6 +50,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     private View captureButton;
     private LinesView lines;
     private FrameLayout cropRoot;
+    private View markerMenu;
 
     private final List<Marker> markers = new ArrayList<Marker>();
     private boolean markersHidden = false;
@@ -295,6 +296,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         if (panel != null) saveTargets();
         safeRemove(cropRoot);
         cropRoot = null;
+        closeMarkerMenu();
         for (Marker m : markers) {
             safeRemove(m.a);
             safeRemove(m.b);
@@ -405,8 +407,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         Marker m = new Marker();
         m.t = t.copy();
         int size = markerSize();
-        int color = t.type == Target.TAP ? 0xCC1E88E5 : (t.type == Target.SWIPE ? 0xCC43A047 : 0xCCFB8C00);
-        m.a = markerView(circle(color, Color.WHITE, dp(2)));
+        m.a = markerView(circle(0, Color.WHITE, dp(2)));
         m.la = params(size, size, true);
         m.la.x = (int) (t.x - size / 2f);
         m.la.y = (int) (t.y - size / 2f);
@@ -421,8 +422,18 @@ public final class ClickerService extends AccessibilityService implements Engine
             wm.addView(m.b, m.lb);
         }
         markers.add(m);
+        style(m);
         renumber();
         if (lines != null) lines.invalidate();
+    }
+
+    /** Colors: regular (منتظم) targets get a gold border. */
+    private void style(Marker m) {
+        int color = m.t.type == Target.TAP ? 0xCC1E88E5 : (m.t.type == Target.SWIPE ? 0xCC43A047 : 0xCCFB8C00);
+        int stroke = m.t.regular ? 0xFFFFD600 : Color.WHITE;
+        int w = m.t.regular ? dp(4) : dp(2);
+        m.a.setBackground(circle(color, stroke, w));
+        if (m.b != null) m.b.setBackground(circle(0x8843A047, m.t.regular ? 0xFFFFD600 : 0xFFC8E6C9, dp(3)));
     }
 
     private TextView markerView(GradientDrawable bg) {
@@ -438,7 +449,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     private void renumber() {
         for (int i = 0; i < markers.size(); i++) {
             Marker m = markers.get(i);
-            String n = String.valueOf(i + 1);
+            String n = (m.t.regular ? "📌" : "") + (i + 1);
             if (m.t.type == Target.HOLD) m.a.setText("🕹" + n);
             else m.a.setText(n);
             if (m.b != null) m.b.setText(n + "▸");
@@ -520,10 +531,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         boolean moved;
         final Runnable longPress = new Runnable() {
             public void run() {
-                if (!moved) {
-                    removeMarker(m);
-                    toast("تم حذف الهدف");
-                }
+                if (!moved) showMarkerMenu(m);
             }
         };
 
@@ -572,6 +580,86 @@ public final class ClickerService extends AccessibilityService implements Engine
         }
     }
 
+    /** Small menu shown on long press: regular / random, delete. */
+    private void showMarkerMenu(final Marker m) {
+        closeMarkerMenu();
+        if (isRunning()) {
+            toast("أوقف التشغيل أولاً");
+            return;
+        }
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xF01B2430);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), 0x884FC3F7);
+        box.setBackground(bg);
+        box.setPadding(dp(6), dp(6), dp(6), dp(6));
+
+        TextView title = new TextView(this);
+        title.setText("الهدف " + (markers.indexOf(m) + 1) + (m.t.regular ? " — منتظم 📌" : " — عشوائي 🎲"));
+        title.setTextColor(0xFFB0BEC5);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        title.setPadding(dp(4), 0, dp(4), dp(4));
+        box.addView(title);
+
+        TextView toggle = menuItem(m.t.regular ? "🎲 اجعله عشوائي" : "📌 اجعله منتظم", 0xFF8D6E00);
+        toggle.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                m.t.regular = !m.t.regular;
+                style(m);
+                renumber();
+                saveTargets();
+                closeMarkerMenu();
+                toast(m.t.regular ? "منتظم: نفس المكان ونفس الوقت ونفس الترتيب كل مرة" : "عشوائي مثل الباقي");
+            }
+        });
+        box.addView(toggle);
+        TextView del = menuItem("🗑 حذف", 0xFFB71C1C);
+        del.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                closeMarkerMenu();
+                removeMarker(m);
+            }
+        });
+        box.addView(del);
+        TextView close = menuItem("✕ إغلاق", 0xFF455A64);
+        close.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                closeMarkerMenu();
+            }
+        });
+        box.addView(close);
+
+        WindowManager.LayoutParams lp = params(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, true);
+        int[] ss = screenSize();
+        lp.x = Math.max(0, Math.min(ss[0] - dp(190), m.la.x + markerSize()));
+        lp.y = Math.max(0, Math.min(ss[1] - dp(200), m.la.y));
+        markerMenu = box;
+        wm.addView(box, lp);
+    }
+
+    private TextView menuItem(String text, int color) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        b.setGravity(Gravity.CENTER);
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(8));
+        b.setBackground(d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(170), dp(42));
+        lp.setMargins(0, dp(3), 0, dp(3));
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    private void closeMarkerMenu() {
+        safeRemove(markerMenu);
+        markerMenu = null;
+    }
+
     /** Non-touchable full screen layer that draws swipe arrows and joystick ranges. */
     static final class LinesView extends View {
         final ClickerService s;
@@ -615,6 +703,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     private void startRun() {
         if (isRunning()) return;
         if (cropRoot != null) return;
+        closeMarkerMenu();
         cfg = Store.loadSettings(this);
         int[] ss = screenSize();
         sw = ss[0];

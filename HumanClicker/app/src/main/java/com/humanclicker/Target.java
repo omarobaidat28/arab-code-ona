@@ -15,6 +15,8 @@ public final class Target {
     public int type;
     public float x, y;   // tap point / swipe start / joystick center
     public float x2, y2; // swipe end
+    /** Regular (منتظم): fixed slot in the order, exact point, steady timing. */
+    public boolean regular;
 
     public Target(int type, float x, float y, float x2, float y2) {
         this.type = type;
@@ -25,7 +27,9 @@ public final class Target {
     }
 
     public Target copy() {
-        return new Target(type, x, y, x2, y2);
+        Target t = new Target(type, x, y, x2, y2);
+        t.regular = regular;
+        return t;
     }
 
     JSONObject toJson() throws Exception {
@@ -35,12 +39,15 @@ public final class Target {
         o.put("y", y);
         o.put("x2", x2);
         o.put("y2", y2);
+        o.put("r", regular);
         return o;
     }
 
     static Target fromJson(JSONObject o) {
-        return new Target(o.optInt("t", TAP), (float) o.optDouble("x", 200), (float) o.optDouble("y", 400),
+        Target t = new Target(o.optInt("t", TAP), (float) o.optDouble("x", 200), (float) o.optDouble("y", 400),
                 (float) o.optDouble("x2", 400), (float) o.optDouble("y2", 400));
+        t.regular = o.optBoolean("r", false);
+        return t;
     }
 
     static JSONArray listToJson(List<Target> list) {
