@@ -2406,7 +2406,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
         const d = makeDoor3(D, 0, zw, -1, st, ow, oh);
         const cb = chalkboard(IX + 2.6, zw + 2.2, -0.35, (LANG === 'en' ? st.src.title.replace(/[^A-Za-z0-9’'&\- ]/g, '').trim().slice(0, 22) : st.src.title.replace(/[^؀-ۿ\s]/g, '').trim()) || tx('مراجعة', 'Review'));
         st.room = { doors: [d], zw, board: cb };
-        D.inter.push({ pos: new V3(IX + 2.6, 0, zw + 2.9), r: 1.7, label: () => tx('📝 حلّ لغز المراجعة', '📝 Solve the review puzzle'), act: () => openPuzzle(st), enabled: () => run.i === k && !st.solved });
+        D.inter.push({ pos: new V3(IX + 2.6, 0, zw + 2.9), r: 1.7, label: () => tx('📝 حلّ لغز المراجعة', '📝 Solve the review puzzle'), act: () => st.solved ? openPuzzleDoor(st) : openPuzzle(st), enabled: () => run.i === k && !st.doorOpened });
       } else {
         const ow = 3.2, oh = 3.5;
         wall((-RW / 2 - 0.6 - ow / 2) / 2, zw, RW / 2 + 0.6 - ow / 2, 0.6); wall((RW / 2 + 0.6 + ow / 2) / 2, zw, RW / 2 + 0.6 - ow / 2, 0.6); wall(0, zw, ow, 0.6, RH - oh, oh, false);
@@ -2454,6 +2454,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     if (D.kind === 'exam') { D.tick && D.tick(dt); return; }
     if (D.kind !== 'lecture') return;
     if (D.ring) D.ring.rotation.z += dt * 0.2;
+    { const st = cur(); if (st && st.t !== 'room' && st.solved && !st.doorOpened && !modalOpen()) openPuzzleDoor(st); }
     if (D.shadow && D.shadow.obj.visible) D.shadow.update(dt);
     if (!run.bossStarted && run.i >= run.steps.length && G.P.pos.z < D.arena.z0 - 1.5) startBossFight();
     if (D.boss) D.boss.anim(G.t, dt);
@@ -2494,15 +2495,20 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     tween(0.55, k => sh.obj.position.lerpVectors(from, to, k), () => { burst(sh.obj.position.clone().setY(1.2), 0x30001a, 34, 4, 1, .7, 1); sh.obj.visible = false; }, p => p * p);
   }
   /* ---------- review puzzles ---------- */
-  function openPuzzle(st) { sfx.cast(); openModal(`<section class="puzzle panelpz" id="pzl"></section><div class="sheet-actions"><button class="btn ghost small" id="pclose">${tx('↩ رجوع', '↩ Back')}</button></div>`); $('#pclose').onclick = closeModal; drawPuzzle(st); }
+  function openPuzzle(st) { sfx.cast(); openModal(`<section class="puzzle panelpz" id="pzl"></section><div class="sheet-actions"><button class="btn ghost small" id="pclose">${tx('↩ رجوع', '↩ Back')}</button></div>`); $('#pclose').onclick = () => { closeModal(); openPuzzleDoor(st); }; drawPuzzle(st); }
   function drawPuzzle(st) { if (st.t === 'match') renderMatch(st); else if (st.t === 'order') renderOrder(st); else renderSort(st); }
   function pzShell(st, inner) { const el = $('#pzl'); if (!el) return null; el.innerHTML = `<span class="lock" aria-hidden="true">${st.solved ? '🔓' : '🔒'}</span><h2>${st.src.title}</h2><p class="pmeta">${st.src.intro}</p>${inner}<div id="pzfb"></div>`; return el; }
   function solved(st) {
     st.solved = true; sfx.win(); save.potions++; save.keys++; gainXP(40); persist();
     const lk = $('#pzl .lock'); if (lk) lk.textContent = '🔓';
     $('#pzfb').innerHTML = `<div class="reward"><b>${tx('🔓 أحسنت! المراجعة مكتملة', '🔓 Well done! Review complete')}</b> +🧪 +🗝️ +40 XP <button class="btn small" id="og">${tx('افتح الباب ➜', 'Open the door ➜')}</button></div>`;
-    $('#og').onclick = () => { closeModal(); const R = st.room, d = R.doors[0]; d.open = true; d.col.off = true; sfx.door(); shake(.12); if (st.lock) { tween(0.6, p => { st.lock.position.y = (d.leaf.position.y * 0) + 1.55 - p * 1.5; st.lock.rotation.z = p * 1.2; }); } if (st.lockGlow) st.lockGlow.material.color.setHex(0x7dff9a); tween(1.0, p => d.pivot.rotation.y = p * 1.6); burst(new V3(d.x, 2, d.zw), 0x7dffb0, 34, 3, 1, .4, 1, 0); run.i++; renderHUD(); qToast(tx('🔓 انفتح الباب!', '🔓 The door is open!'), 'good', 2000); };
+    $('#og').onclick = () => { closeModal(); openPuzzleDoor(st); };
     $('#pzfb').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  // opens the locked door after a solved puzzle (also if the player closed the puzzle with ↩ Back)
+  function openPuzzleDoor(st) {
+    if (!st || !st.solved || st.doorOpened || !run || run.steps[run.i] !== st) return; st.doorOpened = true;
+    { const R = st.room, d = R.doors[0]; d.open = true; d.col.off = true; sfx.door(); shake(.12); if (st.lock) { tween(0.6, p => { st.lock.position.y = (d.leaf.position.y * 0) + 1.55 - p * 1.5; st.lock.rotation.z = p * 1.2; }); } if (st.lockGlow) st.lockGlow.material.color.setHex(0x7dff9a); tween(1.0, p => d.pivot.rotation.y = p * 1.6); burst(new V3(d.x, 2, d.zw), 0x7dffb0, 34, 3, 1, .4, 1, 0); run.i++; renderHUD(); qToast(tx('🔓 انفتح الباب!', '🔓 The door is open!'), 'good', 2000); }
   }
   function renderMatch(st) {
     const left = st.lo || (st.lo = shuffle(st.pairs.map((p, k) => k))), right = st.ro || (st.ro = shuffle(st.pairs.map((p, k) => k)));
