@@ -14,9 +14,10 @@ public final class Config {
     public static final int ORDER_SHUFFLE = 1;  // 213 321 132 (each target once per round, new order every round)
     public static final int ORDER_CHAOS = 2;    // 1123 31 2213 ... (fully random, repeats & skips)
     public static final int ORDER_HUMAN = 3;    // mostly shuffled, with human habits (repeats, skips, swaps)
+    public static final int ORDER_TOGETHER = 4; // all targets at the same time (multi-touch), each with its own rhythm
 
     public int mode = MODE_TARGETS;
-    public int order = ORDER_HUMAN;
+    public int order = ORDER_TOGETHER;
 
     // Timing between actions (ms)
     public int intervalMin = 280;
@@ -43,10 +44,11 @@ public final class Config {
     public int swipeHoldMax = 2500;      // ms (heavy tailed: sometimes short, sometimes long)
 
     // Hold / joystick (random wandering drag, e.g. moving a game character)
-    public int holdMin = 700;
-    public int holdMax = 15000;
+    public int holdMin = 1500;
+    public int holdMax = 60000;
+    public int rareLongChance = 4;       // % rare walks longer than holdMax (up to x1.6)
     public int wander = 150;             // px radius around the joystick center
-    public int longChance = 30;          // % chance of a long hold / long dwell
+    public int longChance = 25;          // % chance of a long hold / long dwell
 
     // Stop conditions
     public int cycles = 0;               // 0 = infinite (in image mode: number of clicks)
@@ -77,6 +79,7 @@ public final class Config {
     public static Config fromJson(JSONObject o) {
         Config c = new Config();
         if (o == null) return c;
+        boolean old = !o.has("rareLongChance");
         for (Field f : Config.class.getFields()) {
             if (Modifier.isStatic(f.getModifiers()) || !o.has(f.getName())) continue;
             try {
@@ -84,6 +87,12 @@ public final class Config {
                 else if (f.getType() == boolean.class) f.setBoolean(c, o.getBoolean(f.getName()));
             } catch (Exception ignored) {
             }
+        }
+        if (old) { // settings from v1: switch to the new defaults
+            c.order = ORDER_TOGETHER;
+            c.holdMin = 1500;
+            c.holdMax = 60000;
+            c.longChance = 25;
         }
         return c;
     }
@@ -105,8 +114,9 @@ public final class Config {
         c.curve = clamp(c.curve, 0, 150);
         c.swipeHoldChance = clamp(c.swipeHoldChance, 0, 100);
         c.swipeHoldMax = clamp(c.swipeHoldMax, 0, 50000);
-        c.holdMin = clamp(c.holdMin, 100, 58000);
-        c.holdMax = clamp(Math.max(c.holdMin, c.holdMax), 100, 58000);
+        c.holdMin = clamp(c.holdMin, 200, 100000);
+        c.holdMax = clamp(Math.max(c.holdMin, c.holdMax), 200, 100000);
+        c.rareLongChance = clamp(c.rareLongChance, 0, 100);
         c.wander = clamp(c.wander, 10, 2000);
         c.longChance = clamp(c.longChance, 0, 100);
         c.cycles = Math.max(0, c.cycles);
@@ -117,7 +127,7 @@ public final class Config {
         c.scanMax = Math.max(c.scanMin, c.scanMax);
         c.confirmFrames = clamp(c.confirmFrames, 1, 5);
         if (c.mode != MODE_IMAGE) c.mode = MODE_TARGETS;
-        c.order = clamp(c.order, 0, 3);
+        c.order = clamp(c.order, 0, 4);
         return c;
     }
 

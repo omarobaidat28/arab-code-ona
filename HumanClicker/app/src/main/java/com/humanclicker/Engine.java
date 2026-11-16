@@ -30,13 +30,13 @@ public final class Engine implements Runnable {
     public static final int ST_RUN = 0, ST_REST = 1, ST_WAIT = 2;
     private static final long MAX_GESTURE = 59000;
 
-    private final Host host;
-    private final Config c;
+    final Host host;
+    final Config c;
     private final List<Target> targets;
     private final List<TemplateMatcher.Template> templates;
-    private final Human h = new Human();
+    final Human h = new Human();
     private volatile boolean running = true;
-    private long startedAt;
+    long startedAt;
     private int[] prevOrder;
     private final double phase, wavePeriod;
     private int actions = 0;
@@ -68,6 +68,7 @@ public final class Engine implements Runnable {
             }
             startedAt = System.currentTimeMillis();
             if (c.mode == Config.MODE_IMAGE) reason = runImages();
+            else if (c.order == Config.ORDER_TOGETHER) reason = new TogetherRunner(this, targets).run();
             else reason = runTargets();
         } catch (Throwable t) {
             reason = "خطأ: " + t.getMessage();
@@ -78,7 +79,7 @@ public final class Engine implements Runnable {
 
     // =================================================================== helpers
 
-    private boolean sleep(long ms) {
+    boolean sleep(long ms) {
         long end = System.currentTimeMillis() + ms;
         while (running) {
             long left = end - System.currentTimeMillis();
@@ -92,12 +93,12 @@ public final class Engine implements Runnable {
         return false;
     }
 
-    private boolean timeUp() {
+    boolean timeUp() {
         return c.timeLimitMin > 0 && System.currentTimeMillis() - startedAt >= c.timeLimitMin * 60000L;
     }
 
     /** >1 means slower. Fatigue grows slowly and attention comes in waves. */
-    private double tired() {
+    double tired() {
         if (!c.fatigue) return 1.0;
         double el = System.currentTimeMillis() - startedAt;
         double f = 1.0 + Math.min(0.35, el / 60000.0 * 0.008);
@@ -229,6 +230,12 @@ public final class Engine implements Runnable {
     }
 
     private boolean swipe(Target t) {
+        PathBuilder pb = buildSwipe(t);
+        return dispatch(pb.path, pb.durationMs());
+    }
+
+    /** Human swipe path (curved, random length, sometimes overshoot, sometimes keeps holding). */
+    PathBuilder buildSwipe(Target t) {
         float[] a = h.jitter(t.x, t.y, c.spread);
         float[] e = h.jitter(t.x2, t.y2, c.spread * 1.6f);
         // sometimes a shorter / longer swipe in the same direction
@@ -248,45 +255,28 @@ public final class Engine implements Runnable {
             pb.curveTo(ex, ey, c.curve);
         }
         if (h.chance(c.swipeHoldChance)) pb.dwell(h.heavy(80, Math.max(80, c.swipeHoldMax), c.longChance));
-        return dispatch(pb.path, pb.durationMs());
+        return pb;
     }
 
-    /** Random wandering drag around a center: moves a game character in random directions,
-     *  turns, stops, sometimes for a long time, sometimes short. */
+    /** How long the joystick finger stays down: mostly a few seconds, sometimes up to holdMax
+     *  (about a minute), rarely a bit longer than that. */
+    long walkDuration() {
+        long min = c.holdMin, max = c.holdMax;
+        if (h.chance(c.rareLongChance)) return (long) Math.min(120000, h.between(max, max * 1.6));
+        if (h.chance(c.longChance)) return (long) (min + (max - min) * (0.33 + 0.67 * Math.pow(h.u(), 1.3)));
+        return (long) (min + (max - min) * 0.33 * Math.pow(h.u(), 1.7));
+    }
+
+    /** Joystick: random human walk around the center (sequential modes, one gesture <= 58 s). */
     private boolean hold(Target t) {
-        float[] cc = h.jitter(t.x, t.y, c.spread * 0.5f);
-        double cx = cc[0], cy = cc[1];
-        long total = (long) Math.min(MAX_GESTURE - 1000, h.heavy(c.holdMin, c.holdMax, c.longChance));
-        double v = 0.12 + h.u() * 0.25;
-        PathBuilder pb = new PathBuilder(h, host.screenW(), host.screenH(), v);
-        pb.start((float) cx, (float) cy);
-        pb.dwell(h.range(40, 140));
-        double ang = h.u() * Math.PI * 2;
-        double R = c.wander;
-        int guard = 0;
-        while (pb.timeMs() < total && guard++ < 400) {
-            double r = R * (0.4 + 0.6 * h.u());
-            double pick = h.u();
-            long remain = (long) (total - pb.timeMs());
-            if (pick < 0.42) {                      // walk in a (new) direction
-                ang = h.chance(55) ? ang + h.gauss() * 0.9 : h.u() * Math.PI * 2;
-                pb.curveTo(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 25);
-                pb.dwell(Math.min(remain, h.heavy(150, 4000, c.longChance)));
-            } else if (pick < 0.78) {               // turn around the center (circle / arc)
-                double sweep = (0.4 + h.u() * 2.8) * (h.chance(50) ? 1 : -1);
-                pb.arc(cx, cy, r, ang, sweep);
-                ang += sweep;
-                pb.dwell(Math.min(remain, h.heavy(60, 1800, c.longChance)));
-            } else if (pick < 0.88) {               // stop moving for a moment
-                float[] q = h.jitter((float) cx, (float) cy, 6);
-                pb.curveTo(q[0], q[1], 15);
-                pb.dwell(Math.min(remain, h.range(100, 800)));
-            } else {                                // small correction
-                pb.curveTo(pb.cx + h.gauss() * R * 0.15, pb.cy + h.gauss() * R * 0.15, 10);
-                pb.dwell(Math.min(remain, h.range(80, 600)));
-            }
-        }
-        return dispatch(pb.path, pb.durationMs());
+        float[] cc = h.jitter(t.x, t.y, c.spread * 0.3f);
+        long total = Math.min(MAX_GESTURE - 1000, walkDuration());
+        Walker w = new Walker(h, c, host.screenW(), host.screenH(), false);
+        w.startSession(cc[0], cc[1]);
+        Path p = new Path();
+        p.moveTo(w.px, w.py);
+        w.fill(p, total);
+        return dispatch(p, total);
     }
 
     // ---------------- regular (منتظم): exact point, fixed durations, no randomness

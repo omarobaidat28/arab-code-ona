@@ -51,6 +51,10 @@ public final class ClickerService extends AccessibilityService implements Engine
     private LinesView lines;
     private FrameLayout cropRoot;
     private View markerMenu;
+    private final List<View> collapsible = new ArrayList<View>();
+    private boolean collapsed = false;
+    private boolean pickRegular = false;
+    private TextView pinButton;
 
     private final List<Marker> markers = new ArrayList<Marker>();
     private boolean markersHidden = false;
@@ -124,14 +128,53 @@ public final class ClickerService extends AccessibilityService implements Engine
         return p;
     }
 
+    /** Real screen size in the CURRENT rotation (landscape games included). */
     private int[] screenSize() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            Rect b = wm.getCurrentWindowMetrics().getBounds();
-            return new int[]{b.width(), b.height()};
+        try {
+            android.hardware.display.DisplayManager dm =
+                    (android.hardware.display.DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+            Display d = dm.getDisplay(Display.DEFAULT_DISPLAY);
+            android.graphics.Point p = new android.graphics.Point();
+            d.getRealSize(p);
+            if (p.x > 0 && p.y > 0) return new int[]{p.x, p.y};
+        } catch (Exception ignored) {
         }
         DisplayMetrics dm = new DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(dm);
         return new int[]{dm.widthPixels, dm.heightPixels};
+    }
+
+    private boolean landscape() {
+        int[] ss = screenSize();
+        return ss[0] > ss[1];
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        main.postDelayed(new Runnable() {
+            public void run() {
+                orientPanel();
+            }
+        }, 300);
+    }
+
+    private void orientPanel() {
+        if (panel == null) return;
+        panel.setOrientation(landscape() ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        int[] ss = screenSize();
+        panelLp.x = Math.max(0, Math.min(panelLp.x, ss[0] - dp(60)));
+        panelLp.y = Math.max(0, Math.min(panelLp.y, ss[1] - dp(60)));
+        try {
+            wm.updateViewLayout(panel, panelLp);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setCollapsed(boolean c) {
+        collapsed = c;
+        for (View v : collapsible) v.setVisibility(c ? View.GONE : View.VISIBLE);
+        if (!c) applyMode();
     }
 
     private static GradientDrawable circle(int color, int strokeColor, int stroke) {
@@ -225,6 +268,12 @@ public final class ClickerService extends AccessibilityService implements Engine
                 if (!markers.isEmpty()) removeMarker(markers.get(markers.size() - 1));
             }
         });
+        pinButton = button("📌", 0xFF8D6E00);
+        pinButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                setPickRegular(!pickRegular);
+            }
+        });
         TextView eye = button("👁", 0xFF455A64);
         eye.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -232,7 +281,7 @@ public final class ClickerService extends AccessibilityService implements Engine
                 applyMarkerVisibility();
             }
         });
-        for (TextView b : new TextView[]{addTap, addSwipe, addHold, remove, eye}) {
+        for (TextView b : new TextView[]{addTap, addSwipe, addHold, pinButton, remove, eye}) {
             panel.addView(b);
             targetButtons.add(b);
         }
@@ -264,6 +313,15 @@ public final class ClickerService extends AccessibilityService implements Engine
         });
         panel.addView(close);
 
+        collapsible.clear();
+        collapsible.addAll(targetButtons);
+        collapsible.add(cap);
+        collapsible.add(settings);
+        collapsible.add(close);
+        collapsed = false;
+        pickRegular = false;
+        panel.setOrientation(landscape() ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+
         panelLp = params(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, true);
         int[] ss = screenSize();
         panelLp.x = 0;
@@ -285,8 +343,8 @@ public final class ClickerService extends AccessibilityService implements Engine
         d.setColor(color);
         d.setCornerRadius(dp(10));
         b.setBackground(d);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(42), dp(42));
-        lp.setMargins(0, dp(2), 0, dp(2));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        lp.setMargins(dp(2), dp(2), dp(2), dp(2));
         b.setLayoutParams(lp);
         return b;
     }
@@ -333,7 +391,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     private void applyMode() {
         if (panel == null) return;
         boolean img = cfg.mode == Config.MODE_IMAGE;
-        for (View v : targetButtons) v.setVisibility(img ? View.GONE : View.VISIBLE);
+        for (View v : targetButtons) v.setVisibility(img || collapsed ? View.GONE : View.VISIBLE);
         applyMarkerVisibility();
         if (statusView != null && !isRunning()) statusView.setText(img ? "صورة" : "نقر");
     }
@@ -351,6 +409,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     private final class PanelDrag implements View.OnTouchListener {
         float dx, dy;
         int sx, sy;
+        boolean moved;
 
         public boolean onTouch(View v, MotionEvent e) {
             switch (e.getActionMasked()) {
@@ -359,8 +418,13 @@ public final class ClickerService extends AccessibilityService implements Engine
                     dy = e.getRawY();
                     sx = panelLp.x;
                     sy = panelLp.y;
+                    moved = false;
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if (!moved) setCollapsed(!collapsed); // tap the handle = small / full panel
                     return true;
                 case MotionEvent.ACTION_MOVE:
+                    if (Math.hypot(e.getRawX() - dx, e.getRawY() - dy) > dp(6)) moved = true;
                     panelLp.x = (int) (sx + e.getRawX() - dx);
                     panelLp.y = (int) (sy + e.getRawY() - dy);
                     try {
@@ -574,6 +638,7 @@ public final class ClickerService extends AccessibilityService implements Engine
                 case MotionEvent.ACTION_CANCEL:
                     main.removeCallbacks(longPress);
                     if (moved) saveTargets();
+                    else if (pickRegular && e.getActionMasked() == MotionEvent.ACTION_UP) toggleRegular(m);
                     return true;
             }
             return true;
@@ -606,12 +671,8 @@ public final class ClickerService extends AccessibilityService implements Engine
         TextView toggle = menuItem(m.t.regular ? "🎲 اجعله عشوائي" : "📌 اجعله منتظم", 0xFF8D6E00);
         toggle.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                m.t.regular = !m.t.regular;
-                style(m);
-                renumber();
-                saveTargets();
                 closeMarkerMenu();
-                toast(m.t.regular ? "منتظم: نفس المكان ونفس الوقت ونفس الترتيب كل مرة" : "عشوائي مثل الباقي");
+                toggleRegular(m);
             }
         });
         box.addView(toggle);
@@ -637,6 +698,28 @@ public final class ClickerService extends AccessibilityService implements Engine
         lp.y = Math.max(0, Math.min(ss[1] - dp(200), m.la.y));
         markerMenu = box;
         wm.addView(box, lp);
+    }
+
+    private void toggleRegular(Marker m) {
+        if (isRunning()) {
+            toast("أوقف التشغيل أولاً");
+            return;
+        }
+        m.t.regular = !m.t.regular;
+        style(m);
+        renumber();
+        saveTargets();
+        toast("الهدف " + (markers.indexOf(m) + 1) + (m.t.regular
+                ? ": منتظم 📌 (نفس المكان ونفس التوقيت)" : ": عشوائي 🎲"));
+    }
+
+    private void setPickRegular(boolean on) {
+        pickRegular = on;
+        if (pinButton != null) {
+            GradientDrawable d = (GradientDrawable) pinButton.getBackground();
+            d.setColor(on ? 0xFFFFD600 : 0xFF8D6E00);
+        }
+        if (on) toast("📌 اضغط على أي هدف لتجعله منتظم أو عشوائي، ثم اضغط 📌 للإنهاء");
     }
 
     private TextView menuItem(String text, int color) {
@@ -704,6 +787,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         if (isRunning()) return;
         if (cropRoot != null) return;
         closeMarkerMenu();
+        if (pickRegular) setPickRegular(false);
         cfg = Store.loadSettings(this);
         int[] ss = screenSize();
         sw = ss[0];
