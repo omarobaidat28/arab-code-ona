@@ -60,6 +60,12 @@ public final class ClickerService extends AccessibilityService implements Engine
     private boolean markersHidden = false;
 
     private Engine engine;
+    private Thread engineThread;
+    private volatile int gen = 0;
+    private long stopAskedAt = 0;
+    private volatile int fails = 0;
+    private boolean savedCollapsed;
+    private int savedX, savedY;
     private int sw, sh;
     private Config cfg = new Config();
 
@@ -262,6 +268,12 @@ public final class ClickerService extends AccessibilityService implements Engine
                 addNew(Target.HOLD);
             }
         });
+        TextView addLook = button("↔", 0xFF00838F);
+        addLook.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                addNew(Target.LOOK);
+            }
+        });
         TextView remove = button("－", 0xFF6D4C41);
         remove.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -281,7 +293,7 @@ public final class ClickerService extends AccessibilityService implements Engine
                 applyMarkerVisibility();
             }
         });
-        for (TextView b : new TextView[]{addTap, addSwipe, addHold, pinButton, remove, eye}) {
+        for (TextView b : new TextView[]{addTap, addSwipe, addHold, addLook, pinButton, remove, eye}) {
             panel.addView(b);
             targetButtons.add(b);
         }
@@ -351,6 +363,7 @@ public final class ClickerService extends AccessibilityService implements Engine
 
     public void hidePanel() {
         if (engine != null) engine.stop();
+        gen++; // cut off any running engine immediately
         if (panel != null) saveTargets();
         safeRemove(cropRoot);
         cropRoot = null;
@@ -493,7 +506,8 @@ public final class ClickerService extends AccessibilityService implements Engine
 
     /** Colors: regular (منتظم) targets get a gold border. */
     private void style(Marker m) {
-        int color = m.t.type == Target.TAP ? 0xCC1E88E5 : (m.t.type == Target.SWIPE ? 0xCC43A047 : 0xCCFB8C00);
+        int color = m.t.type == Target.TAP ? 0xCC1E88E5 : (m.t.type == Target.SWIPE ? 0xCC43A047
+                : (m.t.type == Target.LOOK ? 0xCC00ACC1 : 0xCCFB8C00));
         int stroke = m.t.regular ? 0xFFFFD600 : Color.WHITE;
         int w = m.t.regular ? dp(4) : dp(2);
         m.a.setBackground(circle(color, stroke, w));
@@ -515,6 +529,7 @@ public final class ClickerService extends AccessibilityService implements Engine
             Marker m = markers.get(i);
             String n = (m.t.regular ? "📌" : "") + (i + 1);
             if (m.t.type == Target.HOLD) m.a.setText("🕹" + n);
+            else if (m.t.type == Target.LOOK) m.a.setText("↔" + n);
             else m.a.setText(n);
             if (m.b != null) m.b.setText(n + "▸");
         }
@@ -776,6 +791,13 @@ public final class ClickerService extends AccessibilityService implements Engine
                     c.drawLine(ex, ey, (float) (ex - Math.cos(ang + 0.5) * al), (float) (ey - Math.sin(ang + 0.5) * al), line);
                 } else if (m.t.type == Target.HOLD) {
                     c.drawCircle(ax, ay, s.cfg.wander, ring);
+                } else if (m.t.type == Target.LOOK) {
+                    float r = s.cfg.lookRange, al = s.dp(12);
+                    c.drawLine(ax - r, ay, ax + r, ay, ring);
+                    c.drawLine(ax - r, ay, ax - r + al, ay - al * 0.7f, ring);
+                    c.drawLine(ax - r, ay, ax - r + al, ay + al * 0.7f, ring);
+                    c.drawLine(ax + r, ay, ax + r - al, ay - al * 0.7f, ring);
+                    c.drawLine(ax + r, ay, ax + r - al, ay + al * 0.7f, ring);
                 }
             }
         }
@@ -785,6 +807,10 @@ public final class ClickerService extends AccessibilityService implements Engine
 
     private void startRun() {
         if (isRunning()) return;
+        if (engineThread != null && engineThread.isAlive() && System.currentTimeMillis() - stopAskedAt < 3000) {
+            toast("لحظة… يتم الإيقاف");
+            return;
+        }
         if (cropRoot != null) return;
         closeMarkerMenu();
         if (pickRegular) setPickRegular(false);
@@ -819,20 +845,167 @@ public final class ClickerService extends AccessibilityService implements Engine
             saveTargets();
             rt = runtimeTargets();
             if (rt.isEmpty()) {
-                toast("أضف هدفاً أولاً (＋ ⇆ 🕹)");
+                toast("أضف هدفاً أولاً (＋ ⇆ 🕹 ↔)");
                 return;
             }
         }
         setMarkersTouchable(false);
-        engine = new Engine(this, cfg, rt, tmpl);
-        Thread th = new Thread(engine, "human-engine");
-        th.setPriority(Thread.NORM_PRIORITY + 1);
-        th.start();
-        updatePlay(true, Engine.ST_RUN);
+        final int g = ++gen;
+        fails = 0;
+        engine = new Engine(new RunHost(g), cfg, rt, tmpl);
+        engineThread = new Thread(engine, "human-engine");
+        engineThread.setPriority(Thread.NORM_PRIORITY + 1);
+        engineThread.start();
+        updatePlay(true, Engine.ST_WAIT);
+        // small panel, moved away from every target so the automation can never press it
+        savedCollapsed = collapsed;
+        savedX = panelLp.x;
+        savedY = panelLp.y;
+        setCollapsed(true);
+        main.post(new Runnable() {
+            public void run() {
+                if (g == gen) movePanelAwayFromTargets();
+            }
+        });
     }
 
     private void stopRun() {
-        if (engine != null) engine.stop();
+        if (engine == null) return;
+        engine.stop();
+        stopAskedAt = System.currentTimeMillis();
+        if (btnPlay != null) {
+            btnPlay.setText("…");
+            ((GradientDrawable) btnPlay.getBackground()).setColor(0xFF616161);
+        }
+    }
+
+    /** Called on the main thread when the run with generation g has really finished. */
+    private void finishRun(int g, String reason) {
+        if (g != gen) return; // an old run that was replaced: ignore it
+        engine = null;
+        setMarkersTouchable(true);
+        updatePlay(false, ST_IDLE);
+        if (statusView != null) statusView.setText(cfg.mode == Config.MODE_IMAGE ? "صورة" : "نقر");
+        if (panel != null) {
+            panelLp.x = savedX;
+            panelLp.y = savedY;
+            try {
+                wm.updateViewLayout(panel, panelLp);
+            } catch (Exception ignored) {
+            }
+            setCollapsed(savedCollapsed);
+            toast(reason + (fails > 0 ? " (" + fails + " حركة انقطعت)" : ""));
+        }
+    }
+
+    /** Area (in overlay coordinates) that a target's finger can reach. */
+    private Rect reach(Marker m) {
+        int half = markerSize() / 2;
+        int x = m.la.x + half, y = m.la.y + half;
+        int r;
+        Rect out;
+        switch (m.t.type) {
+            case Target.HOLD:
+                r = (int) (cfg.wander * 1.4f + cfg.spread);
+                out = new Rect(x - r, y - r, x + r, y + r);
+                break;
+            case Target.LOOK:
+                r = cfg.lookRange + cfg.spread + half;
+                out = new Rect(x - r, y - r / 2, x + r, y + r / 2);
+                break;
+            case Target.SWIPE: {
+                int x2 = m.lb.x + half, y2 = m.lb.y + half, e = (int) (cfg.spread * 1.8f) + half;
+                out = new Rect(Math.min(x, x2) - e, Math.min(y, y2) - e, Math.max(x, x2) + e, Math.max(y, y2) + e);
+                break;
+            }
+            default:
+                r = cfg.spread + half;
+                out = new Rect(x - r, y - r, x + r, y + r);
+        }
+        return out;
+    }
+
+    private void movePanelAwayFromTargets() {
+        if (panel == null) return;
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int pw = panel.getMeasuredWidth(), ph = panel.getMeasuredHeight();
+        int[] ss = screenSize();
+        int m = dp(6);
+        int[][] cand = {
+                {panelLp.x, panelLp.y},
+                {(ss[0] - pw) / 2, m}, {m, m}, {ss[0] - pw - m, m},
+                {m, (ss[1] - ph) / 2}, {ss[0] - pw - m, (ss[1] - ph) / 2},
+                {(ss[0] - pw) / 2, ss[1] - ph - m}, {m, ss[1] - ph - m}, {ss[0] - pw - m, ss[1] - ph - m}};
+        List<Rect> areas = new ArrayList<Rect>();
+        if (cfg.mode != Config.MODE_IMAGE) for (Marker mk : markers) areas.add(reach(mk));
+        int bestI = 0;
+        long bestOverlap = Long.MAX_VALUE;
+        for (int i = 0; i < cand.length; i++) {
+            Rect pr = new Rect(cand[i][0], cand[i][1], cand[i][0] + pw, cand[i][1] + ph);
+            long ov = 0;
+            for (Rect a : areas) {
+                Rect x = new Rect(pr);
+                if (x.intersect(a)) ov += (long) x.width() * x.height();
+            }
+            if (ov < bestOverlap) {
+                bestOverlap = ov;
+                bestI = i;
+                if (ov == 0) break;
+            }
+        }
+        panelLp.x = cand[bestI][0];
+        panelLp.y = cand[bestI][1];
+        try {
+            wm.updateViewLayout(panel, panelLp);
+        } catch (Exception ignored) {
+        }
+        if (bestOverlap > 0) toast("⚠ اللوحة قريبة من الأهداف، حركها لمكان فاضي");
+    }
+
+    /** Host given to each run; once a newer run starts, the old one is cut off completely. */
+    private final class RunHost implements Engine.Host {
+        final int g;
+
+        RunHost(int g) {
+            this.g = g;
+        }
+
+        public boolean gesture(GestureDescription d, long timeoutMs) {
+            if (g != gen) return false;
+            boolean ok = ClickerService.this.gesture(d, timeoutMs);
+            if (!ok && g == gen) fails++;
+            return ok;
+        }
+
+        public Bitmap screenshot() {
+            return g == gen ? ClickerService.this.screenshot() : null;
+        }
+
+        public void status(final String text, final int state) {
+            main.post(new Runnable() {
+                public void run() {
+                    if (g != gen || engine == null || !engine.isRunning()) return;
+                    if (statusView != null) statusView.setText(text);
+                    updatePlay(true, state);
+                }
+            });
+        }
+
+        public void stopped(final String reason) {
+            main.post(new Runnable() {
+                public void run() {
+                    finishRun(g, reason);
+                }
+            });
+        }
+
+        public int screenW() {
+            return sw;
+        }
+
+        public int screenH() {
+            return sh;
+        }
     }
 
     private void updatePlay(boolean running, int state) {

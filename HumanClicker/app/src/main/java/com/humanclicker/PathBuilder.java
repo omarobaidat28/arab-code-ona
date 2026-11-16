@@ -116,7 +116,11 @@ public final class PathBuilder {
         return len / v;
     }
 
+    /** If set (>= 0), the gesture lasts exactly this long whatever the path length. */
+    public long fixedMs = -1;
+
     public long durationMs() {
+        if (fixedMs >= 0) return Math.max(1, fixedMs);
         return Math.max(1, Math.round(len / v));
     }
 

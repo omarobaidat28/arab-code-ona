@@ -255,6 +255,13 @@ final class TogetherRunner {
     /** Builds the strokes of one tap / swipe (relative times). Returns total duration. */
     private long plan(Lane l, List<Path> paths, List<long[]> times) {
         Target t = l.t;
+        if (t.type == Target.LOOK) {
+            PathBuilder pb = e.buildLook(t);
+            long d = Math.min(58000, pb.durationMs());
+            paths.add(pb.path);
+            times.add(new long[]{0, d});
+            return d;
+        }
         if (t.type == Target.SWIPE) {
             if (t.regular) {
                 Path p = new Path();
@@ -310,6 +317,13 @@ final class TogetherRunner {
 
     /** Wait after a tap/swipe: own tempo, bursts of fast taps, sometimes distracted. */
     private long interval(Lane l) {
+        if (l.t.type == Target.LOOK) {
+            if (l.t.regular) return (c.lookGapMin + c.lookGapMax) / 2;
+            long g = (long) (h.delay(Math.max(1, c.lookGapMin), Math.max(1, c.lookGapMax)) * l.tempo);
+            if (h.chance(25)) g = h.range(40, 200);        // two turns right after each other
+            else if (h.chance(5)) g += h.range(2000, 5000); // stares a while
+            return g;
+        }
         if (l.t.regular) return (c.intervalMin + c.intervalMax) / 2;
         double base = h.delay(c.intervalMin, c.intervalMax) * l.tempo * e.tired();
         l.tempo = Math.max(0.65, Math.min(1.6, l.tempo * (1 + h.gauss() * 0.03)));

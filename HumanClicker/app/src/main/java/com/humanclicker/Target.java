@@ -11,12 +11,15 @@ public final class Target {
     public static final int TAP = 0;
     public static final int SWIPE = 1;
     public static final int HOLD = 2;
+    public static final int LOOK = 3; // camera joystick: short left/right turns, rarely up/down
 
     public int type;
     public float x, y;   // tap point / swipe start / joystick center
     public float x2, y2; // swipe end
     /** Regular (منتظم): fixed slot in the order, exact point, steady timing. */
     public boolean regular;
+    /** runtime only: how much the camera has turned to the right (+) or left (-). */
+    public double net;
 
     public Target(int type, float x, float y, float x2, float y2) {
         this.type = type;

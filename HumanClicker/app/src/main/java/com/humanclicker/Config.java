@@ -50,6 +50,14 @@ public final class Config {
     public int wander = 150;             // px radius around the joystick center
     public int longChance = 25;          // % chance of a long hold / long dwell
 
+    // Camera / look joystick (turn the view)
+    public int lookMin = 250;            // ms
+    public int lookMax = 1000;           // ms
+    public int lookRange = 220;          // px max drag distance
+    public int lookVertChance = 8;       // % rare up/down
+    public int lookGapMin = 300;         // ms between two turns
+    public int lookGapMax = 2200;
+
     // Stop conditions
     public int cycles = 0;               // 0 = infinite (in image mode: number of clicks)
     public int timeLimitMin = 0;         // 0 = no limit
@@ -119,6 +127,12 @@ public final class Config {
         c.rareLongChance = clamp(c.rareLongChance, 0, 100);
         c.wander = clamp(c.wander, 10, 2000);
         c.longChance = clamp(c.longChance, 0, 100);
+        c.lookMin = clamp(c.lookMin, 60, 10000);
+        c.lookMax = clamp(Math.max(c.lookMin, c.lookMax), 60, 10000);
+        c.lookRange = clamp(c.lookRange, 10, 3000);
+        c.lookVertChance = clamp(c.lookVertChance, 0, 100);
+        c.lookGapMin = clamp(c.lookGapMin, 0, 60000);
+        c.lookGapMax = clamp(Math.max(c.lookGapMin, c.lookGapMax), 0, 60000);
         c.cycles = Math.max(0, c.cycles);
         c.timeLimitMin = Math.max(0, c.timeLimitMin);
         c.startDelaySec = clamp(c.startDelaySec, 0, 600);

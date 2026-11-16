@@ -258,6 +258,37 @@ public final class Engine implements Runnable {
         return pb;
     }
 
+    /** Camera turn: short drag mostly left / right (balanced so it doesn't spin one way), rarely up / down. */
+    PathBuilder buildLook(Target t) {
+        float[] a = t.regular ? new float[]{t.x, t.y} : h.jitter(t.x, t.y, c.spread * 0.5f);
+        long dur = t.regular ? (c.lookMin + c.lookMax) / 2 : (long) h.between(c.lookMin, c.lookMax);
+        if (!t.regular && h.chance(15)) dur = (long) (c.lookMin + (dur - c.lookMin) * 0.3); // quick flick
+        boolean right;
+        if (t.regular) right = t.net <= 0;
+        else right = h.u() < 0.5 - 0.35 * Math.tanh(t.net / (c.lookRange * 3.0));
+        double dist = t.regular ? c.lookRange * 0.6
+                : c.lookRange * (h.chance(20) ? 0.15 + h.u() * 0.2 : 0.35 + h.u() * 0.65);
+        double dx = right ? dist : -dist;
+        double dy = t.regular ? 0 : h.gauss() * dist * 0.06;     // hands are never perfectly level
+        if (!t.regular && h.chance(c.lookVertChance)) {           // rare look up / down
+            dy = (h.chance(50) ? 1 : -1) * c.lookRange * (0.15 + h.u() * 0.35);
+            dx *= h.u() * 0.5;
+        }
+        t.net += dx;
+        long land = t.regular ? 30 : h.range(20, 60);
+        long endHold = t.regular ? 0 : (h.chance(35) ? h.range(30, 180) : 0);
+        long move = Math.max(60, dur - land - endHold);
+        double len = Math.max(3, Math.hypot(dx, dy));
+        PathBuilder pb = new PathBuilder(h, host.screenW(), host.screenH(), len / move);
+        pb.start(a[0], a[1]);
+        pb.dwell(land);
+        if (t.regular) pb.lineTo(a[0] + dx, a[1] + dy);
+        else pb.curveTo(a[0] + dx, a[1] + dy, 8);
+        pb.dwell(endHold);
+        pb.fixedMs = Math.max(c.lookMin, Math.min(c.lookMax, dur));
+        return pb;
+    }
+
     /** How long the joystick finger stays down: mostly a few seconds, sometimes up to holdMax
      *  (about a minute), rarely a bit longer than that. */
     long walkDuration() {
@@ -308,6 +339,13 @@ public final class Engine implements Runnable {
     }
 
     private void perform(Target t) {
+        if (t.type == Target.LOOK) {
+            PathBuilder pb = buildLook(t);
+            dispatch(pb.path, pb.durationMs());
+            actions++;
+            host.status(String.valueOf(actions), ST_RUN);
+            return;
+        }
         if (t.regular) {
             regular(t);
             actions++;
