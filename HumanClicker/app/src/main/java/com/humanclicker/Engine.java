@@ -79,13 +79,7 @@ public final class Engine implements Runnable {
             }
             startedAt = System.currentTimeMillis();
             if (c.mode == Config.MODE_IMAGE) reason = runImages();
-            else if (c.order == Config.ORDER_TOGETHER) {
-                boolean needHold = false;
-                for (Target t : targets) if (t.type == Target.HOLD) needHold = true;
-                Boolean cont = needHold ? selfTestContinue() : Boolean.TRUE;
-                if (cont == null) reason = "الإيماءات لا تعمل على هذا الجهاز (انظر السجل)";
-                else if (running) reason = new TogetherRunner(this, targets, cont).run();
-            }
+            else if (c.order == Config.ORDER_TOGETHER) reason = new TogetherRunner(this, targets).run();
             else reason = runTargets();
         } catch (Throwable t) {
             reason = "خطأ: " + t;
@@ -345,63 +339,6 @@ public final class Engine implements Runnable {
 
     float radius(Target t) {
         return t.radius > 5 ? t.radius : c.wander;
-    }
-
-    /**
-     * Checks on our own panel (harmless) whether this phone can keep a finger down across two
-     * gestures (continued strokes). Returns TRUE / FALSE, or null if gestures don't work at all.
-     */
-    Boolean selfTestContinue() {
-        int[] p = host.safePoint();
-        if (p == null) {
-            HLog.w("self test skipped: no safe point");
-            return Boolean.TRUE;
-        }
-        int x = p[0], y = p[1];
-        try {
-            Path a = new Path();
-            a.moveTo(x, y);
-            a.lineTo(x + 1, y + 1);
-            a.lineTo(x + 3, y);
-            GestureDescription.StrokeDescription s1 = new GestureDescription.StrokeDescription(a, 0, 150, true);
-            long t0 = System.currentTimeMillis();
-            boolean ok1 = host.gesture(new GestureDescription.Builder().addStroke(s1).build(), 150);
-            long t1 = System.currentTimeMillis();
-            if (!ok1) {
-                HLog.w("self test: a simple gesture failed (" + (t1 - t0) + " ms). Gestures may be blocked.");
-                // try once more without continuation to tell 'blocked' from 'no continuation'
-                Path q = new Path();
-                q.moveTo(x, y);
-                boolean plain = host.gesture(new GestureDescription.Builder()
-                        .addStroke(new GestureDescription.StrokeDescription(q, 0, 60)).build(), 60);
-                HLog.w("self test: plain tap -> " + plain);
-                return plain ? Boolean.FALSE : null;
-            }
-            Path b = new Path();
-            b.moveTo(x + 3, y);
-            b.lineTo(x + 2, y + 2);
-            b.lineTo(x, y);
-            GestureDescription.StrokeDescription s2 = s1.continueStroke(b, 0, 150, true);
-            boolean ok2 = host.gesture(new GestureDescription.Builder().addStroke(s2).build(), 150);
-            long t2 = System.currentTimeMillis();
-            Path cpath = new Path();
-            cpath.moveTo(x, y);
-            boolean ok3 = host.gesture(new GestureDescription.Builder()
-                    .addStroke(s2.continueStroke(cpath, 0, 40, false)).build(), 40);
-            long t3 = System.currentTimeMillis();
-            HLog.i("self test: hold=" + ok1 + "(" + (t1 - t0) + "ms) continue=" + ok2 + "(" + (t2 - t1) + "ms) release="
-                    + ok3 + "(" + (t3 - t2) + "ms) -> continuous hold " + (ok2 && ok3 ? "SUPPORTED" : "NOT supported"));
-            if (!(ok2 && ok3)) {
-                // make sure nothing stays pressed
-                Path r = new Path();
-                r.moveTo(x, y);
-                host.gesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription(r, 0, 20)).build(), 20);
-            }
-            return ok2 && ok3;
-        } catch (Throwable e) {
-            HLog.e("self test exception", e);
-            return Boolean.FALSE;
-        }
     }
 
     /** How long the joystick finger stays down: mostly a few seconds, sometimes up to holdMax

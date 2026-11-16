@@ -60,9 +60,27 @@ public final class Walker {
         planY = cy;
         q.clear();
         pending = null;
-        v = regular ? 0.25 : 0.12 + h.u() * 0.3;
+        v = regular ? 0.6 : 0.45 + h.u() * 0.5;   // a thumb moves a stick quickly
         if (!regular) ang = pickDirection();
         tremor(cx, cy, regular ? 60 : h.range(40, 160));
+    }
+
+    /**
+     * The finger lifts and touches the stick again (new gesture). It lands inside the stick
+     * (at most 70% of the radius from the center, in the same direction) and slides straight
+     * back to where it was, so the walk keeps its direction.
+     */
+    public void retouch() {
+        int ox = px, oy = py;
+        double d = Math.hypot(px - cx, py - cy), lim = R * 0.7;
+        if (d <= lim) return;
+        px = clx(cx + (ox - cx) * lim / d);
+        py = cly(cy + (oy - cy) * lim / d);
+        if (pending != null) {
+            q.addFirst(new double[]{0, pending[0], pending[1], 0});
+            pending = null;
+        }
+        q.addFirst(new double[]{0, ox, oy, 0});
     }
 
     /** Finger lifted and touches the center again (used when the device cannot continue strokes). */

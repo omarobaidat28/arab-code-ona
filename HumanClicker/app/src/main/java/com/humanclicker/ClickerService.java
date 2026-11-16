@@ -963,12 +963,12 @@ public final class ClickerService extends AccessibilityService implements Engine
         int r;
         Rect out;
         switch (m.t.type) {
-            case Target.HOLD:
-                r = (int) (rad(m) * 1.4f + cfg.spread);
+            case Target.HOLD:   // fingers only LAND within half the radius (they may slide further)
+                r = (int) (rad(m) * 0.8f + cfg.spread);
                 out = new Rect(x - r, y - r, x + r, y + r);
                 break;
             case Target.LOOK:
-                r = (int) (cfg.lookStyle == 0 ? rad(m) * 1.2f + cfg.spread : cfg.lookRange + cfg.spread + half);
+                r = (int) (cfg.lookStyle == 0 ? cfg.spread + half : cfg.lookRange + cfg.spread + half);
                 out = new Rect(x - r, y - r, x + r, y + r);
                 break;
             case Target.SWIPE: {

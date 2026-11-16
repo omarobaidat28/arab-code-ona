@@ -5,61 +5,70 @@ import android.accessibilityservice.GestureDescription.StrokeDescription;
 import android.graphics.Path;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * "All at the same time" mode: every target is its own finger with its own rhythm, like a real
- * player using several fingers. Time is cut into windows of a few seconds; each window is one
- * multi-touch gesture. Joystick fingers that are still walking at the end of a window stay down
- * (continued strokes), so a walk can last a long time (even more than a minute).
+ * "All at the same time" mode: every target is its own finger with its own rhythm.
+ *
+ * Rules learned from real devices (S26 Ultra + Moonlight):
+ *  - Android numbers injected fingers 0..9 and only frees the numbers when ALL fingers are up.
+ *    So every gesture ("window") holds at most FRESH_MAX new touches and ends with all fingers
+ *    up. A walk that lasts longer simply touches the stick again at the next window (in the same
+ *    direction), a gap of a few milliseconds.
+ *  - Continued strokes are NOT used: on real devices they were rejected most of the time.
+ *  - Game sticks (e.g. Moonlight) treat two presses less than ~350 ms apart as a stick CLICK
+ *    (L3 / R3). A stick finger never presses again within STICK_REPRESS ms.
+ *  - A stick finger always lands near the stick center, never outside the stick.
  */
 final class TogetherRunner {
+    static final int FRESH_MAX = 9;
+    static final long STICK_REPRESS = 450;
+
     private final Engine e;
     private final Engine.Host host;
     private final Config c;
     private final Human h;
     private final List<Lane> lanes = new ArrayList<Lane>();
-    private final int maxStrokes;
-    private boolean allowContinue = true;
-    private int quickFails = 0;
     private long T0 = 0;   // virtual time (ms) of the start of the current window
     private int actions = 0;
     private int windowNo = 0;
+    private int cancelled = 0;
 
     private static final class Lane {
         Target t;
+        int no;
         long nextFree;
+        long lastDown = -100000;
         double tempo;
-        float bx, by;      // slowly drifting habit offset of this finger
+        float bx, by;
         int burstLeft;
-        // joystick
+        // walking stick
         Walker walker;
         boolean inSession;
-        long sessStart, sessEnd;
-        StrokeDescription open;
+        boolean pendingStart;   // a walk was planned but did not fit: start it fresh next window
+        long sessEnd;
     }
 
-    TogetherRunner(Engine e, List<Target> targets, boolean continueOk) {
+    TogetherRunner(Engine e, List<Target> targets) {
         this.e = e;
         this.host = e.host;
         this.c = e.c;
         this.h = e.h;
-        int ms = 10;
-        try {
-            ms = GestureDescription.getMaxStrokeCount();
-        } catch (Throwable ignored) {
-        }
-        maxStrokes = Math.max(4, Math.min(20, ms));
-        allowContinue = continueOk;
-        HLog.i("together: maxStrokes=" + maxStrokes + " continuousHold=" + allowContinue);
-        for (Target t : targets) {
+        for (int i = 0; i < targets.size(); i++) {
+            Target t = targets.get(i);
             Lane l = new Lane();
             l.t = t;
-            l.nextFree = h.range(0, 1200);                 // fingers don't all start together
-            l.tempo = t.regular ? 1 : 0.8 + h.u() * 0.45;  // each finger has its own speed
+            l.no = i + 1;
+            l.nextFree = h.range(0, 1200);
+            l.tempo = t.regular ? 1 : 0.8 + h.u() * 0.45;
             if (t.type == Target.HOLD) l.walker = new Walker(h, c, host.screenW(), host.screenH(), t.regular, e.radius(t));
             lanes.add(l);
         }
+        HLog.i("together: " + lanes.size() + " fingers, max " + FRESH_MAX + " touches per gesture, stick re-press >= " + STICK_REPRESS + "ms");
     }
 
     // ================================================================ main loop
@@ -77,125 +86,146 @@ final class TogetherRunner {
                 reason = "انتهى الوقت";
                 break;
             }
-            // without continuous hold a window must be long, otherwise the walk restarts too often
-            long len = allowContinue ? h.range(2500, 7000) : h.range(12000, 25000);
-            if (h.chance(c.restChance * len / 10000.0)) { // the whole hand takes a break
-                liftAll();
+            if (h.chance(c.restChance * 0.4)) { // the whole hand takes a break
                 long rest = (long) (h.between(c.restMinSec, c.restMaxSec) * 1000);
+                HLog.v("rest " + rest + "ms");
                 host.status("استراحة " + (rest / 1000) + " ث", Engine.ST_REST);
                 if (!e.sleep(rest)) break;
                 for (Lane l : lanes) {
                     l.inSession = false;
+                    l.pendingStart = false;
                     l.nextFree = Math.max(l.nextFree, T0) + rest + h.range(0, 1500);
                 }
                 T0 += rest;
                 host.status(String.valueOf(actions), Engine.ST_RUN);
                 continue;
             }
-            window(len);
+            window();
         }
-        liftAll();
+        HLog.i("together end: windows=" + windowNo + " actions=" + actions + " cancelled=" + cancelled);
         return reason;
+    }
+
+    private boolean isStick(Lane l) {
+        return l.t.type == Target.HOLD || (l.t.type == Target.LOOK && c.lookStyle == 0);
+    }
+
+    /** When this finger wants to press next (absolute virtual time). */
+    private long eventTime(Lane l) {
+        long t = Math.max(l.nextFree, T0);
+        if (isStick(l)) t = Math.max(t, l.lastDown + STICK_REPRESS);
+        return t;
     }
 
     // ================================================================ one window
 
-    private void window(long len) {
+    private void window() {
+        boolean hasWalk = false;
+        for (Lane l : lanes) if (l.t.type == Target.HOLD) hasWalk = true;
+        long end = T0 + (hasWalk ? h.range(8000, 30000) : h.range(2500, 7000));
+        int fresh = 0;
+        long maxEnd = T0, lastSessStart = T0;
         List<StrokeDescription> strokes = new ArrayList<StrokeDescription>();
-        long end = T0 + len;
-        int holdLanes = 0;
-        for (Lane l : lanes) if (l.t.type == Target.HOLD) holdLanes++;
-        int budget = Math.max(2, maxStrokes - 2 * holdLanes);
-        long maxEnd = T0;
+        Map<Lane, List<long[]>> segs = new HashMap<Lane, List<long[]>>(); // {start, sessionEnd, newSession}
 
-        // ---- taps and swipes, in time order across fingers
-        List<Lane> deferred = new ArrayList<Lane>();
+        // 1. walks that go on from the previous window: touch the stick again
+        for (Lane l : lanes) {
+            if (l.t.type != Target.HOLD) continue;
+            segs.put(l, new ArrayList<long[]>());
+            if (!l.inSession) continue;
+            long s = Math.max(T0, l.lastDown + STICK_REPRESS);
+            if (s >= l.sessEnd - 50) {
+                l.inSession = false;
+                continue;
+            }
+            segs.get(l).add(new long[]{s, l.sessEnd, l.pendingStart ? 1 : 0});
+            l.pendingStart = false;
+            l.lastDown = s;
+            fresh++;
+            lastSessStart = Math.max(lastSessStart, s);
+        }
+
+        // 2. everything else, in time order across fingers
+        Set<Lane> skip = new HashSet<Lane>();
         while (true) {
             Lane best = null;
+            long bt = 0;
             for (Lane l : lanes) {
-                if (l.t.type == Target.HOLD || deferred.contains(l) || l.nextFree >= end) continue;
-                if (best == null || l.nextFree < best.nextFree) best = l;
+                if (skip.contains(l)) continue;
+                long t = eventTime(l);
+                if (t >= end) continue;
+                if (best == null || t < bt) {
+                    best = l;
+                    bt = t;
+                }
             }
             if (best == null) break;
-            long start = Math.max(best.nextFree, T0);
-            List<Path> paths = new ArrayList<Path>();
-            List<long[]> times = new ArrayList<long[]>(); // {relStart, duration}
-            long d = plan(best, paths, times);
-            if (start + d > end) {
-                if (start == T0 && strokes.isEmpty() && d < 58000) {
-                    end = T0 + d + 20;      // a long swipe at the very start: make the window fit it
-                } else {
-                    deferred.add(best);     // next window
-                    continue;
+            if (best.t.type == Target.HOLD) {                       // a new walk starts
+                if (fresh + 1 > FRESH_MAX) {
+                    end = Math.max(Math.max(maxEnd, bt), lastSessStart + 250);
+                    break;
                 }
+                best.sessEnd = bt + sessionLength(best);
+                best.nextFree = best.sessEnd + idleGap(best);
+                best.lastDown = bt;
+                best.inSession = true;
+                segs.get(best).add(new long[]{bt, best.sessEnd, 1});
+                fresh++;
+                lastSessStart = Math.max(lastSessStart, bt);
+                actions++;
+                HLog.v("walk " + best.no + " starts for " + (best.sessEnd - bt) + "ms");
+                continue;
             }
-            if (strokes.size() + paths.size() > budget) {
-                if (!allowContinue) {       // keep the walk going; this finger waits
-                    deferred.add(best);
+            List<Path> paths = new ArrayList<Path>();
+            List<long[]> times = new ArrayList<long[]>();
+            long d = plan(best, paths, times);
+            if (fresh + paths.size() > FRESH_MAX) {
+                end = Math.max(Math.max(maxEnd, bt), lastSessStart + 250);
+                break;
+            }
+            if (bt + d > end) {
+                if (strokes.isEmpty() && !hasWalk && bt == T0 && d < 58000) {
+                    end = bt + d + 20;
+                } else {
+                    skip.add(best);
                     continue;
                 }
-                end = Math.max(maxEnd, start);
-                break;
             }
             for (int i = 0; i < paths.size(); i++) {
                 long[] tm = times.get(i);
-                strokes.add(new StrokeDescription(paths.get(i), start - T0 + tm[0], tm[1]));
+                strokes.add(new StrokeDescription(paths.get(i), bt - T0 + tm[0], tm[1]));
             }
-            maxEnd = Math.max(maxEnd, start + d);
-            best.nextFree = start + d + interval(best);
+            fresh += paths.size();
+            maxEnd = Math.max(maxEnd, bt + d);
+            if (isStick(best)) best.lastDown = bt;
+            best.nextFree = bt + d + interval(best);
             actions++;
         }
-        if (end <= T0) end = T0 + 50;
+        if (end < T0 + 50) end = T0 + 50;
 
-        // ---- joystick fingers
-        boolean hasContinue = false;
+        // 3. walking strokes, now that the window end is known
         for (Lane l : lanes) {
             if (l.t.type != Target.HOLD) continue;
-            long cursor = T0;
-            int used = 0;
-            while (cursor < end && used < 2) {
-                if (!l.inSession) {
-                    if (l.nextFree >= end) break;
-                    l.sessStart = Math.max(l.nextFree, cursor);
-                    if (end - l.sessStart < 150) {
-                        l.nextFree = end;
-                        break;
+            for (long[] sg : segs.get(l)) {
+                long s = sg[0], e2 = Math.min(sg[1], end);
+                if (e2 - s < 30) {
+                    if (sg[1] > end) {                    // continue next window
+                        l.inSession = true;
+                        if (sg[2] == 1) l.pendingStart = true;
                     }
-                    l.sessEnd = l.sessStart + sessionLength(l);
-                    HLog.v("walk start target " + (lanes.indexOf(l) + 1) + " for " + (l.sessEnd - l.sessStart) + "ms");
+                    continue;
+                }
+                if (sg[2] == 1) {
                     float[] cc = l.t.regular ? new float[]{l.t.x, l.t.y} : h.jitter(l.t.x, l.t.y, c.spread * 0.3f);
                     l.walker.startSession(cc[0], cc[1]);
-                    l.open = null;
-                    l.inSession = true;
-                    actions++;
+                } else {
+                    l.walker.retouch();
                 }
-                if (l.open == null && l.sessStart >= end - 30) break;
-                long segStart = l.open != null ? T0 : Math.max(l.sessStart, cursor);
-                long segEnd = Math.min(l.sessEnd, end);
-                long dur = Math.max(1, segEnd - segStart);
                 Path p = new Path();
                 p.moveTo(l.walker.px, l.walker.py);
-                l.walker.fill(p, dur);
-                boolean cont = allowContinue && l.sessEnd > end && segEnd == end;
-                StrokeDescription sd = l.open != null
-                        ? l.open.continueStroke(p, 0, dur, cont)
-                        : new StrokeDescription(p, segStart - T0, dur, cont);
-                if (l.open != null) hasContinue = true;
-                strokes.add(sd);
-                used++;
-                if (cont) {
-                    l.open = sd;
-                } else {
-                    l.open = null;
-                    if (l.sessEnd <= end) {
-                        l.inSession = false;
-                        l.nextFree = l.sessEnd + idleGap(l);
-                    } else {             // device can't keep the finger down: touch again
-                        l.walker.recenter();
-                        l.sessStart = end + h.range(30, 90);
-                    }
-                }
-                cursor = segEnd;
+                l.walker.fill(p, e2 - s);
+                strokes.add(new StrokeDescription(p, s - T0, e2 - s));
+                l.inSession = sg[1] > end;
             }
         }
 
@@ -211,72 +241,28 @@ final class TogetherRunner {
         try {
             ok = host.gesture(b.build(), end - T0);
         } catch (RuntimeException ex) {
+            HLog.e("gesture build/dispatch failed", ex);
             ok = false;
         }
         long took = System.currentTimeMillis() - t0;
         windowNo++;
-        if (HLog.verbose || !ok) {
-            int taps = 0, holds = 0, conts = 0;
-            for (StrokeDescription sd : strokes) {
-                if (sd.getDuration() > 1500) holds++;
-                else taps++;
-                if (sd.willContinue()) conts++;
-            }
-            String line = "W" + windowNo + " len=" + (end - T0) + "ms strokes=" + strokes.size() + " (short=" + taps
-                    + " long=" + holds + ") keepDown=" + conts + " continuing=" + hasContinue + " -> "
-                    + (ok ? "OK" : "CANCELLED") + " in " + took + "ms";
-            if (ok) HLog.v(line);
-            else HLog.w(line + (took < 200 ? " (rejected immediately)" : " (interrupted, e.g. screen touched)"));
-        }
-        T0 = end;
+        String line = "W" + windowNo + " len=" + (end - T0) + "ms touches=" + strokes.size() + " -> "
+                + (ok ? "OK" : "CANCELLED") + " in " + took + "ms";
+        if (ok) HLog.v(line);
+        else HLog.w(line + (took < 200 ? " (rejected immediately)" : " (interrupted - screen touched?)"));
         if (ok) {
-            quickFails = 0;
+            T0 = end;
         } else {
-            // interrupted (e.g. you touched the screen) -> fingers are up now
-            if (hasContinue && took < 200 && ++quickFails >= 3 && allowContinue) {
-                allowContinue = false;
-                HLog.w("continuous hold disabled after 3 immediate rejections");
-                host.status("بدون إمساك متواصل", Engine.ST_RUN);
-            }
-            for (Lane l : lanes) {
-                l.open = null;
-                if (l.inSession) {
-                    l.inSession = false;
-                    l.nextFree = T0 + h.range(150, 600);
-                }
-            }
-            e.sleep(250);
+            cancelled++;
+            T0 += Math.max(took, 1);
+            e.sleep(150);
         }
         host.status(String.valueOf(actions), Engine.ST_RUN);
     }
 
-    /** Lift every finger that is still down. */
-    private void liftAll() {
-        List<StrokeDescription> list = new ArrayList<StrokeDescription>();
-        for (Lane l : lanes) {
-            if (l.open != null) {
-                Path p = new Path();
-                p.moveTo(l.walker.px, l.walker.py);
-                try {
-                    list.add(l.open.continueStroke(p, 0, 20, false));
-                } catch (RuntimeException ignored) {
-                }
-                l.open = null;
-            }
-            l.inSession = false;
-        }
-        if (list.isEmpty()) return;
-        GestureDescription.Builder b = new GestureDescription.Builder();
-        for (StrokeDescription sd : list) b.addStroke(sd);
-        try {
-            host.gesture(b.build(), 20);
-        } catch (RuntimeException ignored) {
-        }
-    }
-
     // ================================================================ finger behaviour
 
-    /** Builds the strokes of one tap / swipe (relative times). Returns total duration. */
+    /** Builds the strokes of one tap / swipe / camera turn (relative times). Returns total duration. */
     private long plan(Lane l, List<Path> paths, List<long[]> times) {
         Target t = l.t;
         if (t.type == Target.LOOK) {
@@ -311,7 +297,6 @@ final class TogetherRunner {
             times.add(new long[]{0, d});
             return d;
         }
-        // the finger's favourite spot drifts slowly, and each tap lands around it
         float lim = c.spread * 0.6f;
         l.bx = Math.max(-lim, Math.min(lim, (float) (l.bx + h.gauss() * c.spread * 0.08)));
         l.by = Math.max(-lim, Math.min(lim, (float) (l.by + h.gauss() * c.spread * 0.08)));
@@ -339,13 +324,13 @@ final class TogetherRunner {
         return p;
     }
 
-    /** Wait after a tap/swipe: own tempo, bursts of fast taps, sometimes distracted. */
+    /** Wait after a tap / turn: own tempo, bursts, sometimes distracted. */
     private long interval(Lane l) {
         if (l.t.type == Target.LOOK) {
             if (l.t.regular) return (c.lookGapMin + c.lookGapMax) / 2;
             long g = (long) (h.delay(Math.max(1, c.lookGapMin), Math.max(1, c.lookGapMax)) * l.tempo);
-            if (h.chance(25)) g = h.range(40, 200);        // two turns right after each other
-            else if (h.chance(5)) g += h.range(2000, 5000); // stares a while
+            if (h.chance(20)) g = h.range(60, 250);          // two turns close together
+            else if (h.chance(5)) g += h.range(2000, 5000);  // looks around a while
             return g;
         }
         if (l.t.regular) return (c.intervalMin + c.intervalMax) / 2;
@@ -358,7 +343,7 @@ final class TogetherRunner {
         } else if (h.chance(12)) {
             l.burstLeft = h.range(2, 5);
         }
-        if (h.chance(4)) base += h.range(1500, 6000); // this finger is busy / distracted
+        if (h.chance(4)) base += h.range(1500, 6000);
         return Math.max(40, (long) base);
     }
 
@@ -367,11 +352,10 @@ final class TogetherRunner {
         return e.walkDuration();
     }
 
-    /** Finger up between two walks: usually short, sometimes longer. */
     private long idleGap(Lane l) {
         if (l.t.regular) return 500;
         double p = h.u();
-        if (p < 0.70) return h.range(120, 900);
+        if (p < 0.70) return h.range(150, 900);
         if (p < 0.95) return h.range(1000, 4000);
         return h.range(5000, 12000);
     }
