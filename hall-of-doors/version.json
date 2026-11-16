@@ -1,16 +1,16 @@
 {
- "version": "3.4.2",
- "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/b3c8623c42dbaee25c166be466a8ade1774bf99b/hall-of-doors/index.html",
+ "version": "3.4.3",
+ "web": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
   "🔓 إصلاح: الباب ينفتح تلقائياً بعد حل اللغز حتى لو ضغطت «رجوع»",
-  "📝 ألغاز المراجعة تسأل فقط عن ما شرحته المخطوطات",
+  "🆘 زر «أنا عالق» في قائمة الاستراحة يحرّرك في أي موقف",
   "🌐 تغيير اللغة فوري"
  ],
  "notes_en": [
   "🔓 Fix: the door opens automatically after solving a puzzle, even if you pressed “Back”",
-  "📝 Review puzzles only ask about what the scrolls explained",
+  "🆘 “I’m stuck” button in the pause menu frees you in any situation",
   "🌐 Instant language switching"
  ]
 }

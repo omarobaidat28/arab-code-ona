@@ -1661,7 +1661,7 @@ LECTURES.push({
     ui.sheet.className = 'sheet ' + cls; ui.sheet.innerHTML = html; ui.modal.hidden = false; ui.modal.classList.toggle('clear', clear); ui.sheet.scrollTop = 0;
     if (document.pointerLockElement) document.exitPointerLock();
   }
-  function closeModal() { ui.modal.hidden = true; ui.sheet.innerHTML = ''; }
+  function closeModal() { ui.modal.hidden = true; ui.sheet.innerHTML = ''; try { for (const k in K) K[k] = false; input.mx = input.my = 0; } catch (e) { } }
   const modalOpen = () => !ui.modal.hidden;
   function fadeTo(cb, hold = 0) { ui.fade.classList.add('on'); setTimeout(() => { cb(); setTimeout(() => ui.fade.classList.remove('on'), 160 + hold); }, 460); }
   function flashRed() { ui.flash.classList.remove('on'); void ui.flash.offsetWidth; ui.flash.classList.add('on'); }
@@ -2959,9 +2959,10 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
   function openPause() {
     openModal(`<section class="pause"><h2>${tx('⏸️ استراحة', '⏸️ Paused')}</h2>
       <div class="row mt"><span class="chip">Lv ${lvlOf(save.xp)} · ${esc(titleOf(lvlOf(save.xp)))}</span><span class="chip">⭐ ${save.xp} XP</span><span class="chip">🏆 ${Object.keys(save.stars).length}/8</span><span class="chip">📝 ${LECTURES.filter(L => quizPassed(L.id)).length}/8</span><span class="chip">🎓 ${midDone() ? '✔' : '—'}</span><span class="chip">🏅 ${calcPoints()}</span></div>
-      <div class="row center mt"><button class="btn" id="p1">${tx('▶ تابع', '▶ Resume')}</button><button class="btn ghost" id="p3">${tx('📖 كتاب المعرفة', '📖 Book of Knowledge')}</button><button class="btn ghost" id="p4">${tx('⚙️ الإعدادات', '⚙️ Settings')}</button>${run || exam ? `<button class="btn ghost" id="p5">${tx('🚪 قاعة الأبواب', '🚪 Hall of Doors')}</button>` : ''}<button class="btn ghost" id="p6">${tx('🏠 الشاشة الرئيسية', '🏠 Main menu')}</button></div>
+      <div class="row center mt"><button class="btn" id="p1">${tx('▶ تابع', '▶ Resume')}</button><button class="btn ghost" id="p3">${tx('📖 كتاب المعرفة', '📖 Book of Knowledge')}</button><button class="btn ghost" id="p4">${tx('⚙️ الإعدادات', '⚙️ Settings')}</button>${run || exam ? `<button class="btn ghost" id="p5">${tx('🚪 قاعة الأبواب', '🚪 Hall of Doors')}</button>` : ''}<button class="btn ghost" id="p6">${tx('🏠 الشاشة الرئيسية', '🏠 Main menu')}</button><button class="btn ghost" id="p7">${tx('🆘 أنا عالق', '🆘 I’m stuck')}</button></div>
       <p class="controls mt">${TOUCH ? tx('العصا للحركة · اسحب يميناً للنظر · ✋ تفاعل · 🏃 ركض · 🧎 انحناء · 🏮 الفانوس', 'Stick to move · drag right side to look · ✋ interact · 🏃 run · 🧎 crouch · 🏮 lantern') : tx('<kbd>WASD</kbd> حركة · الماوس نظر · <kbd>Shift</kbd> ركض · <kbd>C</kbd> انحناء · <kbd>E</kbd> تفاعل · <kbd>F</kbd> الفانوس · <kbd>Q</kbd> جرعة · <kbd>1-6</kbd> الإجابات · <kbd>Esc</kbd> قائمة', '<kbd>WASD</kbd> move · mouse look · <kbd>Shift</kbd> run · <kbd>C</kbd> crouch · <kbd>E</kbd> interact · <kbd>F</kbd> lantern · <kbd>Q</kbd> potion · <kbd>1-6</kbd> answers · <kbd>Esc</kbd> menu')}</p></section>`, 'menu');
     $('#p1').onclick = closeModal; $('#p3').onclick = () => renderCodex(run ? run.li : Math.min(save.unlocked, 7)); $('#p4').onclick = openSettings; $('#p6').onclick = renderTitle;
+    $('#p7').onclick = unstuck;
     if ($('#p5')) $('#p5').onclick = () => { closeModal(); if (exam) leaveExam(); else leaveDungeon(false); };
   }
   // switch language instantly (no reload): texts, bosses, hall signs and the open menu
@@ -2970,6 +2971,16 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     if (G.dungeon && G.dungeon.kind === 'hub') buildHub(); else if (G.dungeon) refreshHub();
     if (exam && exam.answered === null && exam.qs[exam.i]) renderExamPanel();
     renderHUD(); openSettings(); sfx.click();
+  }
+  // safety net: frees the player whatever happened (frozen, stuck input, wedged in geometry, solved puzzle left closed)
+  function unstuck() {
+    closeModal(); const P = G.P, D = G.dungeon; P.frozen = false;
+    for (const k in K) K[k] = false; input.mx = input.my = 0; input.look.dx = input.look.dy = 0;
+    if (run) { const st = cur(); if (st && st.t !== 'room' && st.solved) openPuzzleDoor(st);
+      if (st && st.room) P.pos.set(IX, 0, st.room.zw + RD / 2); else if (D && D.arena) P.pos.set(D.arena.c.x, 0, D.arena.c.z + 8); P.yaw = 0; }
+    else if (exam) { P.pos.set(0, 0, -3); P.yaw = 0; }
+    else { P.pos.set(G.spawn.x, 0, G.spawn.z); P.yaw = G.spawn.yaw; }
+    P.pitch = 0; renderHUD(); sfx.level(); qToast(tx('✅ تم! صرت حرّاً — كمّل اللعب', '✅ Done! You’re free — keep playing'), 'good', 2500);
   }
   function openSettings() {
     const s = save.set, seg = (id, opts, val) => `<span class="seg" id="${id}">${opts.map(([v, l]) => `<button data-v="${v}" class="${String(val) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</span>`;
