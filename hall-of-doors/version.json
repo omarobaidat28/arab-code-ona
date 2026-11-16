@@ -1,16 +1,14 @@
 {
- "version": "3.4.0",
- "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/df58a73bcdd2fbf180fb5b4d2ebab5dad589faf0/hall-of-doors/index.html",
+ "version": "3.4.1",
+ "web": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
-  "🌐 اختيار اللغة: العربية أو English (كل الشروحات والكتب تتحول للإنجليزي)",
-  "🚪 أيقونة جديدة للتطبيق: باب سحري",
-  "🔐 الدخول بحساب GitHub على الموقع"
+  "📝 ألغاز المراجعة صارت تسأل فقط عن الأشياء التي شرحتها المخطوطات التي قرأتها",
+  "🌐 تغيير اللغة صار فورياً بدون إعادة تشغيل"
  ],
  "notes_en": [
-  "🌐 Language choice: Arabic or English (all lessons and books switch to English)",
-  "🚪 New app icon: a magic door",
-  "🔐 Sign in with GitHub on the website"
+  "📝 Review puzzles now only ask about what the scrolls you read have explained",
+  "🌐 Changing the language is now instant, no restart"
  ]
 }
