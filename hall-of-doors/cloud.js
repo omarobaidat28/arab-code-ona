@@ -130,6 +130,17 @@
     try {
       const r = await fetch((C.inApp ? base : '') + 'version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) throw 0;
       const v = await r.json(), mine = window.APP_VERSION || '0.0.0';
+      const native = (() => { try { return localStorage.getItem('hod-native-ver'); } catch (e) { return null; } })() || window.__hodNative || mine;
+      // apps: download the new game inside the app (no APK/EXE download) unless the update needs a new native shell
+      if (C.inApp && cmp(v.version, mine) > 0 && !(v.native_min && cmp(v.native_min, native) > 0)) {
+        if (C.hotBusy) return; C.hotBusy = true;
+        if (manual) toastMsg(tx('⬇️ جاري تنزيل التحديث داخل اللعبة…', '⬇️ Downloading the update inside the game…'));
+        try { await C.hotUpdate(v); } catch (e) { C.hotBusy = false; if (manual) toastMsg(tx('⚠️ تعذّر تنزيل التحديث — تأكد من الإنترنت', '⚠️ Couldn’t download the update — check your internet')); return; }
+        C.hotBusy = false; const notes = EN() && v.notes_en ? v.notes_en : v.notes;
+        overlay(`<h2>${tx('✅ التحديث جاهز!', '✅ Update ready!')}</h2><p>${tx('الإصدار', 'Version')} <b dir="ltr">${esc(v.version)}</b> ${tx('نُزّل داخل اللعبة — بدون تحميل APK أو EXE.', 'was downloaded inside the game — no APK or EXE needed.')}</p>${notes ? `<ul class="notes">${[].concat(notes).map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+          <div class="row center mt"><button class="btn" id="up-now">${tx('🔄 شغّل التحديث الآن', '🔄 Apply the update now')}</button><button class="btn ghost" id="up-later">${tx('لاحقاً (يعمل في المرة القادمة)', 'Later (applies next time)')}</button></div><p class="muted mt">${tx('تقدّمك محفوظ ولن يضيع.', 'Your progress is saved and won’t be lost.')}</p>`);
+        $('#up-now').onclick = () => location.reload(); $('#up-later').onclick = C.close; return;
+      }
       if (cmp(v.version, mine) > 0) {
         const link = C.platform === 'android' ? v.apk : C.platform === 'windows' ? v.exe : null;
         const notes = EN() && v.notes_en ? v.notes_en : v.notes;
@@ -142,6 +153,21 @@
         $('#up-later').onclick = C.close;
       } else if (manual) toastMsg(tx('✅ عندك آخر إصدار (', '✅ You have the latest version (') + esc(mine) + ')');
     } catch (e) { if (manual) toastMsg(tx('⚠️ تعذّر التحقق من التحديثات', '⚠️ Couldn’t check for updates')); }
+  };
+
+  // fetch the new game files from the exact commit of that version and keep them for the app's loader
+  C.hotUpdate = async v => {
+    const sha = (/\/([0-9a-f]{40})\//.exec(v.web || '') || [])[1], site = window.SITE_URL || '';
+    const base = sha ? site.replace(/^(https:\/\/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/).*?(hall-of-doors\/)$/, '$1' + sha + '/$2') : site;
+    const get = f => fetch(base + f + '?t=' + Date.now(), { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(f + ' ' + r.status); return r.text(); });
+    const [html, cfg, cl] = await Promise.all([get('index.html'), get('config.js'), get('cloud.js')]);
+    const inl = t => '<script>' + t.replace(/<\/script/gi, '<\\/script') + '</script>';
+    if (!/window\.GAME_PLATFORM="web"/.test(html) || !/APP_VERSION/.test(cfg)) throw new Error('bad files');
+    const out = html.replace(/window\.GAME_PLATFORM="web";window\.__hodNative="[^"]*";/, `window.GAME_PLATFORM="${C.platform}";window.__hodNative="${v.version}";window.__hodHot="${v.version}";`)
+      .replace('<script src="config.js"></script>', () => inl(cfg)).replace('<script src="cloud.js"></script>', () => inl(cl));
+    if (!out.includes('window.__hodHot=')) throw new Error('patch failed');
+    try { localStorage.setItem('hod-hot-html', out); localStorage.setItem('hod-hot-ver', v.version); }
+    catch (e) { try { localStorage.removeItem('hod-hot-html'); localStorage.removeItem('hod-hot-ver'); } catch (e2) { } throw e; }
   };
 
   /* ---------- landscape ---------- */

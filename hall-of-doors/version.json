@@ -1,16 +1,17 @@
 {
- "version": "3.4.3",
- "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/b39eedc2e9e7ba9c75ee9753fa78b6e1f3e3fe9e/hall-of-doors/index.html",
+ "version": "3.5.0",
+ "web": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
-  "🔓 إصلاح: الباب ينفتح تلقائياً بعد حل اللغز حتى لو ضغطت «رجوع»",
-  "🆘 زر «أنا عالق» في قائمة الاستراحة يحرّرك في أي موقف",
-  "🌐 تغيير اللغة فوري"
+  "🔄 تحديث داخلي: من الآن التحديثات تنزل وتشتغل من داخل اللعبة بدون تحميل APK أو EXE",
+  "⌨️ الحركة تعمل حتى لو لغة الكيبورد عربي",
+  "⎋ زر Esc يغلق القوائم مباشرة"
  ],
+ "native_min": "3.5.0",
  "notes_en": [
-  "🔓 Fix: the door opens automatically after solving a puzzle, even if you pressed “Back”",
-  "🆘 “I’m stuck” button in the pause menu frees you in any situation",
-  "🌐 Instant language switching"
+  "🔄 In-game updates: from now on updates download and apply inside the game, no APK or EXE download",
+  "⌨️ Movement works even with an Arabic keyboard layout",
+  "⎋ Esc closes menus directly"
  ]
 }

@@ -5,7 +5,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="قاعة الأبواب">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/favicon-32.png">
 <style>[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;overscroll-behavior:none}</style>
-<script>window.GAME_PLATFORM="web";</script>
+<script>window.GAME_PLATFORM="web";window.__hodNative="3.5.0";
+/* in-game update: the app keeps a newer copy of the game (downloaded by cloud.js) and runs it instead of the bundled one */
+(function(){if(window.GAME_PLATFORM==="web"||window.__hodHot)return;try{localStorage.setItem("hod-native-ver",window.__hodNative);var v=localStorage.getItem("hod-hot-ver"),h=localStorage.getItem("hod-hot-html");
+function c(a,b){a=String(a).split(".");b=String(b).split(".");for(var i=0;i<3;i++){var x=+a[i]||0,y=+b[i]||0;if(x!==y)return x-y;}return 0;}
+if(v&&h&&c(v,window.__hodNative)>0&&location.search.indexOf("nohot")<0){window.__hodHot=v;document.write(h+'<plaintext hidden style="display:none">');}
+else if(v&&c(v,window.__hodNative)<=0){localStorage.removeItem("hod-hot-ver");localStorage.removeItem("hod-hot-html");}}catch(e){}})();</script>
 <script src="config.js"></script>
 <script src="lib/three.min.js"></script><script src="lib/GLTFLoader.js"></script><script src="lib/SkeletonUtils.js"></script>
 <script src="lib/firebase-app-compat.js"></script><script src="lib/firebase-auth-compat.js"></script><script src="lib/firebase-firestore-compat.js"></script>
@@ -2145,10 +2150,20 @@ function applyLectureLang() { for (const k in LECT_EN) { const r = lectPath(k); 
   /* ---------- input ---------- */
   function bindInput() {
     const c = $('#stage');
+    // physical key (works with Arabic or any keyboard layout): KeyW -> 'w', Digit1 -> '1', ShiftLeft -> 'shift'
+    const keyOf = e => { const c = e.code || ''; if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase(); if (/^(Digit|Numpad)[0-9]$/.test(c)) return c.slice(-1); if (/^Shift/.test(c)) return 'shift'; if (/^Control/.test(c)) return 'control'; if (c === 'Space') return ' '; if (c === 'Escape') return 'escape'; if (c === 'Enter' || c === 'NumpadEnter') return 'enter'; if (/^Arrow/.test(c)) return c.toLowerCase(); return (e.key || '').toLowerCase(); };
+    // Esc closes whatever is open: the account window, then the current menu (its back/done button), else opens the pause menu
+    const escClose = () => {
+      const acct = document.querySelector('#acct'); if (acct && !acct.hidden) { const x = acct.querySelector('#ac-x,#lb-x,#up-later,#ac-guest'); if (x && x.id !== 'ac-guest') x.click(); else if (window.CLOUD) window.CLOUD.close(); return true; }
+      if (!modalOpen()) return false;
+      for (const id of ['#s-ok', '#cb', '#pclose', '#gotit', '#p1', '#vb2', '#lb-x']) { const b = ui.sheet.querySelector(id); if (b) { b.click(); return true; } }
+      if (ui.sheet.classList.contains('title') || ui.modal.classList.contains('clear')) return true;
+      closeModal(); return true;
+    };
     addEventListener('keydown', e => {
-      const k = e.key.toLowerCase(); K[k] = true; if (k === ' ' || k.startsWith('arrow') || k === 'tab') e.preventDefault();
+      const k = keyOf(e); K[k] = true; if (k === ' ' || k.startsWith('arrow') || k === 'tab') e.preventDefault();
       ac();
-      if (k === 'escape') { if (G.mode === 'play' && !modalOpen()) openPause(); return; }
+      if (k === 'escape') { if (!escClose() && G.mode === 'play') openPause(); return; }
       if (G.mode !== 'play' || modalOpen()) return;
       if (k === 'e' || k === 'enter') doInteract();
       if (k === 'f') toggleFlash();
@@ -2157,7 +2172,7 @@ function applyLectureLang() { for (const k in LECT_EN) { const r = lectPath(k); 
       if (exam && /^[1-8]$/.test(k)) { if (exam.answered === null) examAnswer(+k - 1); }
       if (exam && exam.answered !== null && (k === 'n' || k === ' ')) examNext();
     });
-    addEventListener('keyup', e => { K[e.key.toLowerCase()] = false; });
+    addEventListener('keyup', e => { K[keyOf(e)] = false; K[(e.key || '').toLowerCase()] = false; });
     addEventListener('blur', () => { for (const k in K) K[k] = false; });
     c.addEventListener('click', () => { ac(); if (TOUCH || G.mode !== 'play' || modalOpen()) return; if (document.pointerLockElement !== c) { try { c.requestPointerLock(); } catch (e) { } } else doInteract(); });
     let drag = null;
