@@ -9,6 +9,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
@@ -54,6 +55,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     private final List<View> collapsible = new ArrayList<View>();
     private boolean collapsed = false;
     private boolean pickRegular = false;
+    private volatile boolean diagRunning = false;
     private TextView pinButton;
 
     private final List<Marker> markers = new ArrayList<Marker>();
@@ -229,7 +231,7 @@ public final class ClickerService extends AccessibilityService implements Engine
     }
 
     public boolean isRunning() {
-        return engine != null && engine.isRunning();
+        return diagRunning || (engine != null && engine.isRunning());
     }
 
     // ================================================================ panel
@@ -330,7 +332,14 @@ public final class ClickerService extends AccessibilityService implements Engine
             }
         });
         captureButton = cap;
+        TextView diag = button("🧪", 0xFF5D4037);
+        diag.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                runDiag();
+            }
+        });
         panel.addView(cap);
+        panel.addView(diag);
 
         TextView settings = button("⚙", 0xFF37474F);
         settings.setOnClickListener(new View.OnClickListener() {
@@ -353,6 +362,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         collapsible.clear();
         collapsible.addAll(targetButtons);
         collapsible.add(cap);
+        collapsible.add(diag);
         collapsible.add(settings);
         collapsible.add(close);
         collapsed = false;
@@ -913,6 +923,7 @@ public final class ClickerService extends AccessibilityService implements Engine
         int[] sl = new int[2];
         statusView.getLocationOnScreen(sl);
         int[] safe = statusView.getWidth() > 0 ? new int[]{sl[0] + statusView.getWidth() / 2, sl[1] + statusView.getHeight() / 2} : null;
+        logWindows("start");
         HLog.i("start pressed: screen=" + sw + "x" + sh + " rotation=" + rotation() + " panel=" + panelLp.x + "," + panelLp.y
                 + " safePoint=" + (safe == null ? "none" : safe[0] + "," + safe[1]));
         for (int i = 0; i < markers.size(); i++) {
@@ -1003,6 +1014,189 @@ public final class ClickerService extends AccessibilityService implements Engine
                     .getDisplay(Display.DEFAULT_DISPLAY).getRotation();
         } catch (Exception e) {
             return -1;
+        }
+    }
+
+    /** Logs every window on screen (which app is under each touch). */
+    private void logWindows(String tag) {
+        try {
+            List<android.view.accessibility.AccessibilityWindowInfo> ws = getWindows();
+            HLog.i("windows (" + tag + "): " + ws.size());
+            for (android.view.accessibility.AccessibilityWindowInfo w : ws) {
+                Rect r = new Rect();
+                w.getBoundsInScreen(r);
+                String pkg = "?";
+                android.view.accessibility.AccessibilityNodeInfo root = w.getRoot();
+                if (root != null) {
+                    pkg = String.valueOf(root.getPackageName());
+                    root.recycle();
+                }
+                HLog.i("  layer=" + w.getLayer() + " type=" + w.getType() + " pkg=" + pkg + " title=" + w.getTitle()
+                        + " bounds=" + r.toShortString() + (w.isActive() ? " ACTIVE" : "") + (w.isFocused() ? " FOCUSED" : ""));
+            }
+        } catch (Throwable t) {
+            HLog.e("logWindows failed", t);
+        }
+    }
+
+    // ================================================================ touch test 🧪
+
+    private void runDiag() {
+        if (isRunning()) {
+            toast("أوقف التشغيل أولاً");
+            return;
+        }
+        cfg = Store.loadSettings(this);
+        int[] ss = screenSize();
+        sw = ss[0];
+        sh = ss[1];
+        saveTargets();
+        final List<Target> rt = runtimeTargets();
+        if (rt.isEmpty()) {
+            toast("أضف هدف أولاً");
+            return;
+        }
+        logWindows("test");
+        setMarkersTouchable(false);
+        diagRunning = true;
+        if (cfg.collapseWhileRunning) setCollapsed(true);
+        updatePlay(true, Engine.ST_WAIT);
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    diagSteps(rt);
+                } catch (Throwable t) {
+                    HLog.e("test crashed", t);
+                }
+                main.post(new Runnable() {
+                    public void run() {
+                        diagRunning = false;
+                        setMarkersTouchable(true);
+                        updatePlay(false, ST_IDLE);
+                        setCollapsed(false);
+                        if (statusView != null) statusView.setText("نقر");
+                        Toast.makeText(ClickerService.this, "انتهى الاختبار 🧪 — قلي أي أرقام اشتغلت باللعبة", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        }, "touch-test").start();
+    }
+
+    private void diagSay(final String num, final String text) {
+        HLog.i("TEST " + num + ": " + text);
+        main.post(new Runnable() {
+            public void run() {
+                if (statusView != null) statusView.setText("🧪" + num);
+                Toast.makeText(ClickerService.this, "🧪 " + num + ": " + text, Toast.LENGTH_LONG).show();
+            }
+        });
+        sleepQuiet(2500);
+    }
+
+    private static void sleepQuiet(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ignored) {
+        }
+    }
+
+    private float radOf(Target t) {
+        return t.radius > 5 ? t.radius : cfg.wander;
+    }
+
+    /** One stick finger: lands on the center, pushes in direction ang and holds. Returns duration. */
+    private long stickPath(Path p, float cx, float cy, float R, double ang, long hold) {
+        float tx = Math.round(cx + Math.cos(ang) * R * 0.9f), ty = Math.round(cy + Math.sin(ang) * R * 0.9f);
+        p.moveTo(Math.round(cx), Math.round(cy));
+        p.lineTo(Math.round(cx + Math.cos(ang) * R * 0.3f), Math.round(cy + Math.sin(ang) * R * 0.3f));
+        p.lineTo(tx, ty);
+        double moveLen = R * 0.9;
+        double v = moveLen / 150.0;                 // reach the edge in 150 ms
+        double wiggle = v * hold;                   // then stay there (tiny 2px wiggle)
+        int n = (int) Math.max(2, wiggle / 2);
+        for (int i = 0; i < n; i++) p.lineTo(tx + ((i % 2 == 0) ? 1 : -1), ty + ((i % 2 == 0) ? 1 : 0));
+        p.lineTo(tx, ty);
+        return 150 + hold;
+    }
+
+    private boolean diagGesture(String what, GestureDescription g, long dur) {
+        long t0 = System.currentTimeMillis();
+        boolean ok = gesture(g, dur);
+        HLog.i("TEST " + what + " -> " + (ok ? "OK" : "CANCELLED") + " in " + (System.currentTimeMillis() - t0) + "ms");
+        return ok;
+    }
+
+    private void diagSteps(List<Target> rt) {
+        Target tap = null, stick = null, stick2 = null;
+        for (Target t : rt) {
+            if (t.type == Target.TAP && tap == null) tap = t;
+            else if ((t.type == Target.HOLD || t.type == Target.LOOK)) {
+                if (stick == null) stick = t;
+                else if (stick2 == null) stick2 = t;
+            }
+        }
+        HLog.i("TEST targets: tap=" + (tap == null ? "-" : (int) tap.x + "," + (int) tap.y)
+                + " stick=" + (stick == null ? "-" : (int) stick.x + "," + (int) stick.y + " r=" + (int) radOf(stick))
+                + " stick2=" + (stick2 == null ? "-" : (int) stick2.x + "," + (int) stick2.y + " r=" + (int) radOf(stick2)));
+        if (tap != null) {
+            diagSay("1", "3 ضغطات بإصبع واحد على الكبسة (كل ضغطة لحالها)");
+            for (int i = 0; i < 3; i++) {
+                Path p = new Path();
+                p.moveTo(tap.x, tap.y);
+                p.lineTo(tap.x + 1, tap.y);
+                diagGesture("1 tap " + (i + 1), new GestureDescription.Builder()
+                        .addStroke(new GestureDescription.StrokeDescription(p, 0, 120)).build(), 120);
+                sleepQuiet(700);
+            }
+        }
+        if (stick != null) {
+            diagSay("2", "العصا بإصبع واحد: يمين ثانيتين");
+            Path p = new Path();
+            long d = stickPath(p, stick.x, stick.y, radOf(stick), 0, 2000);
+            diagGesture("2 stick right", new GestureDescription.Builder()
+                    .addStroke(new GestureDescription.StrokeDescription(p, 0, d)).build(), d);
+            sleepQuiet(800);
+            diagSay("3", "العصا بإصبع واحد: لفوق ثانيتين");
+            p = new Path();
+            d = stickPath(p, stick.x, stick.y, radOf(stick), -Math.PI / 2, 2000);
+            diagGesture("3 stick up", new GestureDescription.Builder()
+                    .addStroke(new GestureDescription.StrokeDescription(p, 0, d)).build(), d);
+            sleepQuiet(800);
+        }
+        if (stick != null && tap != null) {
+            diagSay("4", "إصبعين معاً: العصا لفوق + 3 ضغطات على الكبسة");
+            Path p = new Path();
+            long d = stickPath(p, stick.x, stick.y, radOf(stick), -Math.PI / 2, 3000);
+            GestureDescription.Builder b = new GestureDescription.Builder();
+            b.addStroke(new GestureDescription.StrokeDescription(p, 0, d));
+            for (int i = 0; i < 3; i++) {
+                Path q = new Path();
+                q.moveTo(tap.x, tap.y);
+                q.lineTo(tap.x + 1, tap.y);
+                b.addStroke(new GestureDescription.StrokeDescription(q, 600 + i * 800, 120));
+            }
+            diagGesture("4 stick+taps", b.build(), d);
+            sleepQuiet(800);
+        }
+        if (stick != null && stick2 != null) {
+            diagSay("5", "عصاتين معاً: الأولى لفوق والثانية يمين");
+            Path p = new Path(), q = new Path();
+            long d = stickPath(p, stick.x, stick.y, radOf(stick), -Math.PI / 2, 3000);
+            long d2 = stickPath(q, stick2.x, stick2.y, radOf(stick2), 0, 3000);
+            GestureDescription.Builder b = new GestureDescription.Builder();
+            b.addStroke(new GestureDescription.StrokeDescription(p, 0, d));
+            b.addStroke(new GestureDescription.StrokeDescription(q, 300, d2));
+            diagGesture("5 two sticks", b.build(), Math.max(d, d2 + 300));
+            sleepQuiet(800);
+        }
+        if (stick != null) {
+            diagSay("6", "العصا لفوق 4 ثواني بإصبع يرفع ويرجع كل ثانية (طريقة 1.6)");
+            for (int i = 0; i < 4; i++) {
+                Path p = new Path();
+                long d = stickPath(p, stick.x, stick.y, radOf(stick), -Math.PI / 2, 950);
+                diagGesture("6 stick piece " + (i + 1), new GestureDescription.Builder()
+                        .addStroke(new GestureDescription.StrokeDescription(p, 0, d)).build(), d);
+            }
         }
     }
 
