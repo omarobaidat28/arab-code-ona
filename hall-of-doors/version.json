@@ -1,17 +1,17 @@
 {
- "version": "3.5.1",
- "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/6f62bdae4e2fbaf7f171af7f422ad47ca7328a98/hall-of-doors/index.html",
+ "version": "3.5.2",
+ "web": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
-  "🪑 الكويز صار على مقعد: ورقة امتحان أمامك وقلم يكتب إجابتك",
-  "💡 أي سؤال صح وخطأ تغلط فيه يظهر لك السبب (147 سؤالاً)",
-  "🐞 إصلاح تخطي السؤال الأول في الكويز"
+  "✅ تصحيح 5 إجابات كانت خاطئة في الكويزات، وتمت مراجعة كل الأسئلة (376) مرتين",
+  "💡 سبب الإجابة الصحيحة يظهر لكل سؤال تغلط فيه",
+  "📄 ورقة الامتحان صارت واضحة وحادة مع قلم يكتب إجابتك"
  ],
  "native_min": "3.5.0",
  "notes_en": [
-  "🪑 Quizzes now at a desk: an exam paper in front of you and a pen that marks your answer",
-  "💡 Every True/False question you miss now shows the reason (147 questions)",
-  "🐞 Fixed the quiz skipping the first question"
+  "✅ Fixed 5 wrong quiz answers; all 376 questions double-checked",
+  "💡 Every question you miss now shows the reason",
+  "📄 The exam paper is now sharp and clear, with a pen that marks your answer"
  ]
 }
