@@ -5,7 +5,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="قاعة الأبواب">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/favicon-32.png">
 <style>[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;overscroll-behavior:none}</style>
-<script>window.GAME_PLATFORM="web";window.__hodNative="3.7.0";
+<script>window.GAME_PLATFORM="web";window.__hodNative="3.7.1";
 /* in-game update: the app keeps a newer copy of the game (downloaded by cloud.js) and runs it instead of the bundled one */
 (function(){if(window.GAME_PLATFORM==="web"||window.__hodHot)return;try{localStorage.setItem("hod-native-ver",window.__hodNative);var v=localStorage.getItem("hod-hot-ver"),h=localStorage.getItem("hod-hot-html");
 function c(a,b){a=String(a).split(".");b=String(b).split(".");for(var i=0;i<3;i++){var x=+a[i]||0,y=+b[i]||0;if(x!==y)return x-y;}return 0;}
@@ -438,7 +438,7 @@ html[dir=rtl] .paper .bfb{font-family:'IBM Plex Sans Arabic',sans-serif;font-siz
 .scroll table.cmp{border-radius:10px;overflow:hidden}.scroll table.cmp td,.scroll table.cmp th{line-height:1.55}
 .scroll table.cmp tr:nth-child(even) td{background:rgba(255,255,255,.22)}
 .scroll h4{margin:12px 0 4px;font-size:1.06em;color:#6b2a08;display:flex;align-items:center;gap:6px}
-.scroll ol.steps{list-style:none;counter-reset:st;padding:0;margin:8px 0}
+.scroll ol.steps{display:block;width:auto;gap:0;list-style:none;counter-reset:st;padding:0;margin:8px 0}
 .scroll ol.steps>li{counter-increment:st;position:relative;padding-inline-start:36px;margin:7px 0;line-height:1.6}
 .scroll ol.steps>li::before{content:counter(st);position:absolute;inset-inline-start:0;top:1px;width:25px;height:25px;border-radius:50%;background:#8a3b12;color:#fff6e0;font-weight:700;font-size:13px;display:grid;place-items:center}
 .scroll ul.pts{list-style:none;padding:0;margin:6px 0}
@@ -483,6 +483,7 @@ html[dir=rtl] .paper .bfb{font-family:'IBM Plex Sans Arabic',sans-serif;font-siz
 #fps{left:50%!important;top:auto!important;bottom:calc(env(safe-area-inset-bottom,0px) + 4px);transform:translateX(-50%);opacity:.75;font-size:11px!important;pointer-events:none}
 body:has(#modal:not([hidden])) #fps,body:has(#paper:not([hidden])) #fps{display:none!important}
 .scroll .ex.nl::before{content:none}
+.opts[dir=rtl]{direction:rtl}
 </style>
 <canvas id="stage" aria-label="3D house"></canvas><div id="cross" class="cross dot" hidden></div><div id="hud" class="hud" hidden></div><div id="objective" class="objective" hidden></div><div id="qcard" class="qcard2" hidden></div><div id="bossbar" class="bossbar" hidden></div><div id="eye" class="eye" hidden></div><div id="qtoast" class="qtoast" hidden></div><div id="prompt" class="prompt" hidden></div><div id="touch" class="touch" hidden></div><div id="sub" class="sub" hidden></div><div id="dock" class="dock" hidden></div><div id="modal" class="modal" hidden><div id="sheet" class="sheet"></div></div><div id="flash" class="flash"></div><div id="fade" class="fade"></div><div id="fps" hidden style="position:fixed;z-index:70;font:12px monospace;color:#9f9;background:#0008;padding:2px 6px;border-radius:6px"></div><div class="rotate"><div class="ph">📱</div><div style="font-size:20px">دوّر جهازك للوضع الأفقي</div><div class="muted" style="font-size:14px">اللعبة تعمل بالعرض (Landscape) 🔄</div></div><div id="loading" class="loading"><div style="font-family:var(--f-scroll);font-size:44px;color:var(--torch-hi)">قاعة الأبواب</div><div id="loadmsg">⏳ جاري التحميل…</div><div class="loadbar" id="loadbar"><i></i></div></div>
 <script>
@@ -2866,6 +2867,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
   // and a memory line identical to the tip is shown once (as the memory line)
   const plainTxt = x => String(x || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
   function tidyNotes(body, tip) {
+    body = body.replace(/<ol class="steps" start="(\d+)">/g, (m, n) => `<ol class="steps" style="counter-reset:st ${+n - 1}">`);
     body = body.replace(/<div class="ex">(\s*(?:<b>|<strong>)\s*(?:✏️\s*)?(?:مثال|أمثلة|Example))/gi, '<div class="ex nl">$1');
     const mems = [...body.matchAll(/<div class="mem">([\s\S]*?)<\/div>/g)].map(m => plainTxt(m[1]));
     return { body, tip: tip && mems.includes(plainTxt(tip)) ? '' : tip };
@@ -3002,7 +3004,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
   function renderBossPanel() {
     const b = run.boss; if (!b || !b.q) return; const q = b.q; renderBossBar(); ui.sub.hidden = true;
     const opts = q.opts.map((o, k) => { let cls = ''; if (b.answered !== null) { if (o.ok) cls = 'ok'; else if (k === b.answered) cls = 'no'; } return `<button class="opt ${cls}" dir="${dirOf(o.t)}" data-k="${k}" ${b.answered !== null ? 'disabled' : ''}><span class="k">${OPTK[k]}</span><span>${esc(o.t)}</span></button>`; }).join('');
-    setDock(`<div class="panel boss"><div class="bq" dir="${dirOf(q.q)}"><span class="diff d${q.d}">${DN[q.d]}</span> ${esc(q.q).replace(/\n/g, ' ')}</div><div class="opts">${opts}</div><div id="bfb"></div></div>`);
+    setDock(`<div class="panel boss"><div class="bq" dir="${dirOf(q.q)}"><span class="diff d${q.d}">${DN[q.d]}</span> ${esc(q.q).replace(/\n/g, ' ')}</div><div class="opts" dir="${dirOf(q.q)}">${opts}</div><div id="bfb"></div></div>`);
     if (b.answered === null) ui.dock.querySelectorAll('.opt').forEach(o => o.onclick = () => bossAnswer(+o.dataset.k));
   }
   function bossAnswer(k) {
@@ -3335,7 +3337,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     if (e.kind === 'quiz' && G.P.seated) { setDock(''); renderPaper(fb); return; }
     const seated = false;
     const lbt = q.opts.map((o, k) => { let cls = ''; if (e.answered !== null) { if (o.ok) cls = 'ok'; else if (k === e.answered) cls = 'no'; } return `<button class="opt lb-opt ${cls}" data-k="${k}" ${e.answered !== null || e.busy ? 'disabled' : ''}>${OPTK[k]}</button>`; }).join('');
-    setDock(seated ? `<div class="panel boss exam quiz seated"><div class="ehead">${head}<span class="muted hintp">${tx('اقرأ الورقة واختر الحرف (أو اضغط على الخيار في الورقة)', 'Read the paper and pick a letter (or click the option on the paper)')}</span></div><div class="lbtns">${lbt}</div><div id="bfb">${fb}</div></div>` : `<div class="panel boss exam ${e.kind}"><div class="ehead">${head}</div><div class="bq" dir="${dirOf(q.q)}">${esc(q.q)}</div><div class="opts">${opts}</div><div id="bfb">${fb}</div></div>`);
+    setDock(seated ? `<div class="panel boss exam quiz seated"><div class="ehead">${head}<span class="muted hintp">${tx('اقرأ الورقة واختر الحرف (أو اضغط على الخيار في الورقة)', 'Read the paper and pick a letter (or click the option on the paper)')}</span></div><div class="lbtns">${lbt}</div><div id="bfb">${fb}</div></div>` : `<div class="panel boss exam ${e.kind}"><div class="ehead">${head}</div><div class="bq" dir="${dirOf(q.q)}">${esc(q.q)}</div><div class="opts" dir="${dirOf(q.q)}">${opts}</div><div id="bfb">${fb}</div></div>`);
     if (e.answered === null && !e.busy) ui.dock.querySelectorAll('.opt').forEach(o => o.onclick = () => examAnswer(+o.dataset.k));
     else { const bn = $('#bn'); if (bn) bn.onclick = examNext; }
   }

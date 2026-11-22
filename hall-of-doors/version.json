@@ -1,19 +1,21 @@
 {
- "version": "3.7.0",
+ "version": "3.7.1",
  "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/3dc32c7b0869744d226cd953a855ae65a09ac367/hall-of-doors/index.html",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
+  "🔢 تصليح القوائم المرقّمة بالشرح: صارت تحت بعض بدل ما تكون جنب بعض",
+  "🅰️ بأسئلة العربي: الخيار أ صار على اليمين",
   "📝 كل الشرح بكل المواد صار مرتّب: جداول، خطوات مرقّمة، صناديق تعريف، و🧠 «احفظها هيك» — بدون حذف أي معلومة",
   "📖 العربي: الأبيات مرتّبة صدر وعجز، وورقة الكويز صارت من اليمين لليسار",
-  "🔤 تصليح ترتيب الكلمات والأقواس «» بالأسئلة، وأسئلة الزعيم بالعربي صارت عربية",
-  "🚪 إلغاء الرجوع لنفس الغرفة: كل محاضرة تبدأ من أولها"
+  "🔤 تصليح ترتيب الكلمات والأقواس «» بالأسئلة، وأسئلة الزعيم بالعربي صارت عربية"
  ],
  "native_min": "3.5.0",
  "notes_en": [
+  "🔢 Fixed numbered lists in the notes: they now go down the page instead of across",
+  "🅰️ In Arabic questions option A is now on the right",
   "📝 Every explanation in every subject is now organised: tables, numbered steps, definition boxes and 🧠 memory lines — nothing removed",
   "📖 Arabic: verses laid out in two halves, and the quiz paper is right-to-left",
-  "🔤 Fixed word order and «» quotes in questions; Arabic boss questions are now in Arabic",
-  "🚪 No more resuming from the same room: each lecture starts from the beginning"
+  "🔤 Fixed word order and «» quotes in questions; Arabic boss questions are now in Arabic"
  ]
 }
