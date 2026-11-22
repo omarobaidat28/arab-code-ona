@@ -124,12 +124,24 @@
   C.openExternal = url => { if (C.platform === 'android') location.href = url; else window.open(url, '_blank'); };
 
   /* ---------- update check ---------- */
+  // some networks cannot reach raw.githubusercontent.com: try the GitHub API and jsDelivr as backups
+  const REPO = (/^https:\/\/raw\.githubusercontent\.com\/([^/]+\/[^/]+)\/(.+?)\/(hall-of-doors\/)$/.exec(window.SITE_URL || '') || []);
+  const tfetch = (url, opt, ms) => { const ac = typeof AbortController !== 'undefined' ? new AbortController() : null; const t = setTimeout(() => ac && ac.abort(), ms || 20000); return fetch(url, Object.assign({ cache: 'no-store' }, opt || {}, ac ? { signal: ac.signal } : {})).finally(() => clearTimeout(t)); };
+  const mirrors = (ref, f) => {
+    const list = [(ref === REPO[2] || !REPO[1] ? (window.SITE_URL || '') : `https://raw.githubusercontent.com/${REPO[1]}/${ref}/${REPO[3]}`) + f + '?t=' + Date.now()];
+    if (REPO[1]) { list.push({ url: `https://api.github.com/repos/${REPO[1]}/contents/${REPO[3]}${f}?ref=${encodeURIComponent(ref)}`, opt: { headers: { Accept: 'application/vnd.github.raw' } } }); list.push(`https://cdn.jsdelivr.net/gh/${REPO[1]}@${ref}/${REPO[3]}${f}`); }
+    return list;
+  };
+  C.getFile = async (ref, f) => {
+    let last;
+    for (const m of mirrors(ref, f)) { const url = m.url || m; try { const r = await tfetch(url, m.opt); if (!r.ok) throw new Error(f + ' ' + r.status); return await r.text(); } catch (e) { last = e; } }
+    throw last || new Error('no mirror');
+  };
   const cmp = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); } return 0; };
   C.checkUpdate = async (manual) => {
     const base = window.SITE_URL || ''; if (!base && C.inApp) return;
     try {
-      const r = await fetch((C.inApp ? base : '') + 'version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) throw 0;
-      const v = await r.json(), mine = window.APP_VERSION || '0.0.0';
+      const v = C.inApp ? JSON.parse(await C.getFile(REPO[2] || '', 'version.json')) : await (async () => { const r = await tfetch('version.json?t=' + Date.now()); if (!r.ok) throw 0; return r.json(); })(), mine = window.APP_VERSION || '0.0.0';
       const native = (() => { try { return localStorage.getItem('hod-native-ver'); } catch (e) { return null; } })() || window.__hodNative || mine;
       // apps: download the new game inside the app (no APK/EXE download) unless the update needs a new native shell
       if (C.inApp && cmp(v.version, mine) > 0 && !(v.native_min && cmp(v.native_min, native) > 0)) {
@@ -152,14 +164,21 @@
         const wb = $('#up-web'); if (wb) wb.onclick = () => C.openExternal(v.web);
         $('#up-later').onclick = C.close;
       } else if (manual) toastMsg(tx('✅ عندك آخر إصدار (', '✅ You have the latest version (') + esc(mine) + ')');
-    } catch (e) { if (manual) toastMsg(tx('⚠️ تعذّر التحقق من التحديثات', '⚠️ Couldn’t check for updates')); }
+    } catch (e) {
+      if (!manual) return;
+      // could not reach any update server: offer the direct links instead of a dead end
+      const apk = (window.SITE_URL || '') + 'downloads/HallOfDoors.apk', exe = (window.SITE_URL || '') + 'downloads/HallOfDoors-Windows.zip';
+      const link = C.platform === 'android' ? apk : C.platform === 'windows' ? exe : null;
+      overlay(`<h2>${tx('⚠️ تعذّر الوصول لسيرفر التحديثات', '⚠️ Couldn’t reach the update server')}</h2><p>${tx('غالباً الإنترنت ضعيف أو الشبكة تحجب GitHub. جرّب شبكة ثانية (واي فاي/بيانات)، أو نزّل آخر نسخة مباشرة من الزر تحت.', 'Your internet may be weak or the network may block GitHub. Try another network (Wi-Fi/mobile data), or download the latest version directly below.')}</p>
+        <div class="row center mt"><button class="btn" id="up-retry">${tx('🔁 حاول مرة ثانية', '🔁 Try again')}</button>${link ? `<button class="btn ghost" id="up-dl">${tx('⬇️ نزّل آخر نسخة', '⬇️ Download the latest version')}</button>` : ''}<button class="btn ghost" id="up-later">${tx('لاحقاً', 'Later')}</button></div>`);
+      $('#up-retry').onclick = () => { C.close(); C.checkUpdate(true); }; const dl = $('#up-dl'); if (dl) dl.onclick = () => C.openExternal(link); $('#up-later').onclick = C.close;
+    }
   };
 
   // fetch the new game files from the exact commit of that version and keep them for the app's loader
   C.hotUpdate = async v => {
-    const sha = (/\/([0-9a-f]{40})\//.exec(v.web || '') || [])[1], site = window.SITE_URL || '';
-    const base = sha ? site.replace(/^(https:\/\/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/).*?(hall-of-doors\/)$/, '$1' + sha + '/$2') : site;
-    const get = f => fetch(base + f + '?t=' + Date.now(), { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(f + ' ' + r.status); return r.text(); });
+    const sha = (/\/([0-9a-f]{40})\//.exec(v.web || '') || [])[1];
+    const get = f => C.getFile(sha || REPO[2] || '', f);
     const [html, cfg, cl] = await Promise.all([get('index.html'), get('config.js'), get('cloud.js')]);
     const inl = t => '<script>' + t.replace(/<\/script/gi, '<\\/script') + '</script>';
     if (!/window\.GAME_PLATFORM="web"/.test(html) || !/APP_VERSION/.test(cfg)) throw new Error('bad files');
