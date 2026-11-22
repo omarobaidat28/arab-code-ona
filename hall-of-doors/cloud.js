@@ -110,7 +110,7 @@
     try {
       const all = await C.top(50), me = C.user ? all.findIndex(r => r.uid === C.user.uid) : -1, rows = all.slice(0, 20);
       const mine = window.hodStats && window.__game ? window.hodStats(window.__game.save) : null;
-      const row = (r, i) => `<tr class="${C.user && r.uid === C.user.uid ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(r.name || tx('لاعب', 'Player'))}</td><td dir="ltr"><b>${r.points || 0}</b></td><td>${r.doors || 0}/8</td><td>${r.quizzes || 0}/8</td><td>${r.mid ? '🎓' : '—'}</td></tr>`;
+      const row = (r, i) => `<tr class="${C.user && r.uid === C.user.uid ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(r.name || tx('لاعب', 'Player'))}</td><td dir="ltr"><b>${r.points || 0}</b></td><td>${r.doors || 0}</td><td>${r.quizzes || 0}</td><td>${r.mid ? '🎓' : '—'}</td></tr>`;
       overlay(`<h2>${tx('🏆 لوحة الشرف', '🏆 Hall of Fame')}</h2>
         <p class="muted" style="margin:0 0 6px">${tx('النقاط 🏅 = نجوم المحاضرات ×100 + أفضل علامة كويز ×10 + الامتحان النصفي (500 + نجومه ×250)', 'Points 🏅 = lecture stars ×100 + best quiz score ×10 + MID exam (500 + its stars ×250)')}</p>
         ${C.user ? `<p class="lb-me">👤 <b>${esc(C.displayName())}</b> · 🏅 <b dir="ltr">${mine ? mine.points : '—'}</b> · ${tx('الترتيب:', 'Rank:')} <b>${me >= 0 ? '#' + (me + 1) : tx('خارج أفضل 50', 'outside the top 50')}</b></p>` : `<p class="muted">${tx('🔐 سجّل الدخول لتظهر في لوحة الشرف', '🔐 Sign in to appear in the Hall of Fame')}</p>`}
