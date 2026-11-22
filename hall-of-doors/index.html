@@ -5,7 +5,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="قاعة الأبواب">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/favicon-32.png">
 <style>[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;overscroll-behavior:none}</style>
-<script>window.GAME_PLATFORM="web";window.__hodNative="3.5.2";
+<script>window.GAME_PLATFORM="web";window.__hodNative="3.5.3";
 /* in-game update: the app keeps a newer copy of the game (downloaded by cloud.js) and runs it instead of the bundled one */
 (function(){if(window.GAME_PLATFORM==="web"||window.__hodHot)return;try{localStorage.setItem("hod-native-ver",window.__hodNative);var v=localStorage.getItem("hod-hot-ver"),h=localStorage.getItem("hod-hot-html");
 function c(a,b){a=String(a).split(".");b=String(b).split(".");for(var i=0;i<3;i++){var x=+a[i]||0,y=+b[i]||0;if(x!==y)return x-y;}return 0;}
@@ -416,6 +416,10 @@ html[dir=rtl] .paper .why{direction:rtl;text-align:right;font-family:'IBM Plex S
 @keyframes penwrite{0%{margin:0 0 0 10px}20%{margin:-10px 0 0 4px}40%{margin:-12px 0 0 -12px}60%{margin:2px 0 0 -14px}80%{margin:10px 0 0 2px}100%{margin:-4px 0 0 12px}}
 @media (max-height:440px){.paper{top:calc(env(safe-area-inset-top,0px) + 44px);max-height:calc(100vh - 50px);padding:10px 16px 10px 60px}.paper .pp-q{font-size:16px;margin:2px 0 6px}.paper .pp-opt{font-size:15px;padding:2px 8px}.paper .pp-opts{gap:2px}.paper .pp-head{font-size:13px}.paper .pp-sub{font-size:12px}.paper .pp-sub{margin:2px 0 4px}.paper .why{font-size:19px}.paper .bfb{font-size:20px}}
 html[dir=rtl] .paper .bfb{font-family:'IBM Plex Sans Arabic',sans-serif;font-size:17px;font-weight:700}html[dir=rtl] .paper .pp-hint{font-family:'IBM Plex Sans Arabic',sans-serif;font-style:normal;display:block;text-align:right}
+.scroll .sc-tr{position:absolute;top:14px;right:16px;z-index:2;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(122,62,20,.45);background:rgba(255,248,230,.85);color:#6b2f0c;border-radius:99px;padding:5px 12px;font:700 13px var(--f-display);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.scroll .sc-tr:hover{background:#fff3d6}
+.scroll[dir=ltr] h2{font-family:var(--f-latin);font-size:clamp(20px,3.4vw,27px)}.scroll[dir=ltr]{text-align:left}.scroll[dir=rtl]{text-align:right}
+@media (max-height:440px){.scroll .sc-tr{top:10px;padding:3px 9px;font-size:12px}}
 </style>
 <canvas id="stage" aria-label="3D house"></canvas><div id="cross" class="cross dot" hidden></div><div id="hud" class="hud" hidden></div><div id="objective" class="objective" hidden></div><div id="qcard" class="qcard2" hidden></div><div id="bossbar" class="bossbar" hidden></div><div id="eye" class="eye" hidden></div><div id="qtoast" class="qtoast" hidden></div><div id="prompt" class="prompt" hidden></div><div id="touch" class="touch" hidden></div><div id="sub" class="sub" hidden></div><div id="dock" class="dock" hidden></div><div id="modal" class="modal" hidden><div id="sheet" class="sheet"></div></div><div id="flash" class="flash"></div><div id="fade" class="fade"></div><div id="fps" hidden style="position:fixed;z-index:70;font:12px monospace;color:#9f9;background:#0008;padding:2px 6px;border-radius:6px"></div><div class="rotate"><div class="ph">📱</div><div style="font-size:20px">دوّر جهازك للوضع الأفقي</div><div class="muted" style="font-size:14px">اللعبة تعمل بالعرض (Landscape) 🔄</div></div><div id="loading" class="loading"><div style="font-family:var(--f-scroll);font-size:44px;color:var(--torch-hi)">قاعة الأبواب</div><div id="loadmsg">⏳ جاري التحميل…</div><div class="loadbar" id="loadbar"><i></i></div></div>
 <script>
@@ -2516,10 +2520,27 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
   }
 
   /* ---------- scrolls & doors ---------- */
-  function scrollHTML(s, idx) {
-    const title = s.title.replace(/([A-Za-z][A-Za-z0-9 &’'.,?()\-]*[A-Za-z0-9?)])/g, '<bdi>$1</bdi>');
-    return `<article class="scroll"><div class="kicker">📜 ${tx('المخطوطة', 'Scroll')} ${idx}</div><h2>${title}</h2>${s.body.replace(/<table/g, '<div class="tbl"><table').replace(/<\/table>/g, '</table></div>')}${s.tip ? `<div class="tip">💡 ${s.tip}</div>` : ''}</article>`;
+  // a scroll in either language; the 🌐 button swaps just this scroll between Arabic and English
+  function scrollText(s, lang) {
+    const L = LECTURES.find(l => l.steps.includes(s)), k = L ? `${L.id}.steps.${L.steps.indexOf(s)}.` : null;
+    const pick = f => { if (!k || typeof LECT_EN === 'undefined') return s[f]; const src = lang === 'en' ? LECT_EN : LECT_AR; return src[k + f] !== undefined ? src[k + f] : s[f]; };
+    return { title: pick('title'), body: pick('body'), tip: s.tip ? pick('tip') : '', sid: L ? `${L.id}:${L.steps.indexOf(s)}` : '' };
   }
+  function scrollInner(s, idx, lang) {
+    const t = scrollText(s, lang), ar = lang !== 'en';
+    const title = ar ? t.title.replace(/([A-Za-z][A-Za-z0-9 &’'.,?()\-]*[A-Za-z0-9?)])/g, '<bdi>$1</bdi>') : t.title;
+    return `<button class="sc-tr" type="button" data-to="${ar ? 'en' : 'ar'}" title="${ar ? 'Translate to English' : 'ترجمة للعربية'}">🌐 ${ar ? 'English' : 'عربي'}</button><div class="kicker">📜 ${ar ? 'المخطوطة' : 'Scroll'} ${idx}</div><h2>${title}</h2>${t.body.replace(/<table/g, '<div class="tbl"><table').replace(/<\/table>/g, '</table></div>')}${t.tip ? `<div class="tip">💡 ${t.tip}</div>` : ''}`;
+  }
+  function scrollHTML(s, idx) {
+    const lang = LANG === 'en' ? 'en' : 'ar', t = scrollText(s, lang);
+    return `<article class="scroll" dir="${lang === 'en' ? 'ltr' : 'rtl'}" data-sid="${t.sid}" data-idx="${idx}">${scrollInner(s, idx, lang)}</article>`;
+  }
+  document.addEventListener('click', ev => {
+    const b = ev.target.closest && ev.target.closest('.sc-tr'); if (!b) return;
+    const art = b.closest('article.scroll'), [id, i] = (art.dataset.sid || '').split(':'), L = LECTURES.find(l => l.id === id); if (!L) return;
+    const to = b.dataset.to, s = L.steps[+i]; sfx.click();
+    art.innerHTML = scrollInner(s, art.dataset.idx, to); art.dir = to === 'en' ? 'ltr' : 'rtl'; art.classList.toggle('sc-en', to === 'en');
+  });
   function openScroll(st) {
     sfx.click();
     openModal(scrollHTML(st.src, st.idx + 1) + `<div class="sheet-actions"><button class="btn" id="gotit">${st.read ? tx('عُد إلى الأبواب 🚪', 'Back to the doors 🚪') : tx('فهمت! اكشف الأبواب 🚪', 'Got it! Reveal the doors 🚪')}</button></div>`);
