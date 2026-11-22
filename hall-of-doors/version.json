@@ -1,17 +1,17 @@
 {
- "version": "3.6.2",
+ "version": "3.6.3",
  "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/8c40e9b556c27f6cd022aa41ec7c90b9b1cbcb86/hall-of-doors/index.html",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
+  "📶 إصلاح مهم للأندرويد: التطبيق صار يقدر يتصل بالإنترنت (تسجيل الدخول، الحفظ بالسحابة، الترتيب، والتحديثات)",
   "📡 التحديث صار يشتغل حتى لو الشبكة ما بتوصل لسيرفر GitHub الرئيسي (سيرفرات احتياطية)",
-  "🚪 لكل محاضرة ثلاثة أبواب مرتّبة: 📝 كويز · المحاضرة · 📒 مراجعة",
-  "📒 باب المراجعة صار لكل محاضرة لحالها، وأخطاؤك القديمة انتقلت لمحاضراتها تلقائياً"
+  "🚪 لكل محاضرة ثلاثة أبواب مرتّبة: 📝 كويز · المحاضرة · 📒 مراجعة"
  ],
  "native_min": "3.5.0",
  "notes_en": [
+  "📶 Important Android fix: the app can now use the internet (sign-in, cloud save, leaderboard and updates)",
   "📡 Updates now work even when the network can’t reach GitHub’s main server (backup servers)",
-  "🚪 Every lecture now has three tidy doors: 📝 quiz · lecture · 📒 review",
-  "📒 Each lecture has its own review door; your old mistakes were moved to their lectures automatically"
+  "🚪 Every lecture now has three tidy doors: 📝 quiz · lecture · 📒 review"
  ]
 }
