@@ -1,17 +1,19 @@
 {
- "version": "3.6.3",
+ "version": "3.7.0",
  "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/a96298e79fefffd6352f4fbd7cd7dab04aa36f0c/hall-of-doors/index.html",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
-  "📶 إصلاح مهم للأندرويد: التطبيق صار يقدر يتصل بالإنترنت (تسجيل الدخول، الحفظ بالسحابة، الترتيب، والتحديثات)",
-  "📡 التحديث صار يشتغل حتى لو الشبكة ما بتوصل لسيرفر GitHub الرئيسي (سيرفرات احتياطية)",
-  "🚪 لكل محاضرة ثلاثة أبواب مرتّبة: 📝 كويز · المحاضرة · 📒 مراجعة"
+  "📝 كل الشرح بكل المواد صار مرتّب: جداول، خطوات مرقّمة، صناديق تعريف، و🧠 «احفظها هيك» — بدون حذف أي معلومة",
+  "📖 العربي: الأبيات مرتّبة صدر وعجز، وورقة الكويز صارت من اليمين لليسار",
+  "🔤 تصليح ترتيب الكلمات والأقواس «» بالأسئلة، وأسئلة الزعيم بالعربي صارت عربية",
+  "🚪 إلغاء الرجوع لنفس الغرفة: كل محاضرة تبدأ من أولها"
  ],
  "native_min": "3.5.0",
  "notes_en": [
-  "📶 Important Android fix: the app can now use the internet (sign-in, cloud save, leaderboard and updates)",
-  "📡 Updates now work even when the network can’t reach GitHub’s main server (backup servers)",
-  "🚪 Every lecture now has three tidy doors: 📝 quiz · lecture · 📒 review"
+  "📝 Every explanation in every subject is now organised: tables, numbered steps, definition boxes and 🧠 memory lines — nothing removed",
+  "📖 Arabic: verses laid out in two halves, and the quiz paper is right-to-left",
+  "🔤 Fixed word order and «» quotes in questions; Arabic boss questions are now in Arabic",
+  "🚪 No more resuming from the same room: each lecture starts from the beginning"
  ]
 }
