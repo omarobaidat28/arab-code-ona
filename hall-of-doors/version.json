@@ -1,9 +1,11 @@
 {
- "version": "3.6.0",
+ "version": "3.6.1",
  "web": "https://rawcdn.githack.com/omarobaidat28/arab-code-ona/f1458a73bd13ab2e019b3a04eb1b20e6a1b2c0be/hall-of-doors/index.html",
  "apk": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors.apk",
  "exe": "https://raw.githubusercontent.com/omarobaidat28/arab-code-ona/claude/interactive-educational-game-jghjb2/hall-of-doors/downloads/HallOfDoors-Windows.zip",
  "notes": [
+  "🚪 لكل محاضرة ثلاثة أبواب مرتّبة: 📝 كويز · المحاضرة · 📒 مراجعة",
+  "📒 باب المراجعة صار لكل محاضرة لحالها، وأخطاؤك القديمة انتقلت لمحاضراتها تلقائياً",
   "📚 مادتان جديدتان: أساسيات الأمن السيبراني (6 أسابيع) واللغة العربية (5 وحدات)، مع كويزات وبوس لكل محاضرة",
   "💾 حفظ التقدّم: إذا طلعت من اللعبة ترجع لنفس الغرفة أو نفس رقم السؤال",
   "🔁 باب المراجعة: كل سؤال غلطت فيه ينضاف تلقائياً مع شرح إضافي",
@@ -11,6 +13,8 @@
  ],
  "native_min": "3.5.0",
  "notes_en": [
+  "🚪 Every lecture now has three tidy doors: 📝 quiz · lecture · 📒 review",
+  "📒 Each lecture has its own review door; your old mistakes were moved to their lectures automatically",
   "📚 Two new subjects: Cybersecurity Fundamentals (6 weeks) and Arabic (5 units), each with quizzes and a boss",
   "💾 Progress is saved: leave the game and continue from the same room or question",
   "🔁 Review door: every question you got wrong is added automatically with an extra explanation",

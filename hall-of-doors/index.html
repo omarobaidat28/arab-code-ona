@@ -5,7 +5,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="قاعة الأبواب">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/favicon-32.png">
 <style>[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;overscroll-behavior:none}</style>
-<script>window.GAME_PLATFORM="web";window.__hodNative="3.6.0";
+<script>window.GAME_PLATFORM="web";window.__hodNative="3.6.1";
 /* in-game update: the app keeps a newer copy of the game (downloaded by cloud.js) and runs it instead of the bundled one */
 (function(){if(window.GAME_PLATFORM==="web"||window.__hodHot)return;try{localStorage.setItem("hod-native-ver",window.__hodNative);var v=localStorage.getItem("hod-hot-ver"),h=localStorage.getItem("hod-hot-html");
 function c(a,b){a=String(a).split(".");b=String(b).split(".");for(var i=0;i<3;i++){var x=+a[i]||0,y=+b[i]||0;if(x!==y)return x-y;}return 0;}
@@ -2373,8 +2373,8 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     const ce = new T.Mesh(new T.PlaneGeometry(HW, HD), new T.MeshStandardMaterial({ map: repTex(G.tex.ceiling, 10, 4) })); ce.rotation.x = Math.PI / 2; ce.position.y = HH; G.build.add(ce);
     const xs = [-10.5, -3.5, 3.5, 10.5], DW = 1.6, DH = 2.7, QW = 1.15, QH = 2.25;
     [[-HD / 2, 1], [HD / 2, -1]].forEach(([z, face], side) => {
-      // each lecture door has its quiz door right beside it (on the reader's left)
-      const holes = []; xs.forEach((xc, j) => { const li = side * 4 + j; if (!LECTURES[li]) return; holes.push({ x: xc + face * 0.95, w: DW, h: DH, li, type: 'lec' }, { x: xc - face * 1.3, w: QW, h: QH, li, type: 'quiz' }); });
+      // every lecture has three doors: quiz (reader's left) · lecture (middle) · review (reader's right)
+      const holes = []; xs.forEach((xc, j) => { const li = side * 4 + j; if (!LECTURES[li]) return; holes.push({ x: xc, w: DW, h: DH, li, type: 'lec' }, { x: xc - face * 2.0, w: QW, h: QH, li, type: 'quiz' }, { x: xc + face * 2.0, w: QW, h: QH, li, type: 'review' }); });
       holes.sort((a, b) => a.x - b.x);
       let last = -HW / 2 - 0.3; const t = 0.4;
       holes.forEach(hl => { const a = hl.x - hl.w / 2; wallBox(D, (last + a) / 2, z - face * t / 2, a - last, t, HH, wallT); wallBox(D, hl.x, z - face * t / 2, hl.w, t, HH - hl.h, wallT, hl.h, false); last = hl.x + hl.w / 2; });
@@ -2389,6 +2389,8 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
           const lightS = glowSprite(0xffd27a, 1.1, .9); lightS.position.set(x, DH + 0.35, z + face * 0.25); G.build.add(lightS);
           D.doors.push({ type: 'lec', li, x, z, face, pm, lightS });
           D.inter.push({ pos: new V3(x, 0, z + face * 1.1), r: 1.3, label: () => hubLabel(li), act: () => hubEnter(li) });
+        } else if (hl.type === 'review') {
+          buildReviewDoor(D, li, x, z, face);
         } else {
           G.build.add(at(rbox(QW - 0.04, QH - 0.03, 0.08, std(0xa8c8ff, { map: G.tex.door, rough: .45 }), 0.012), x, QH / 2, z));
           G.build.add(at(sph(0.04, M.gold, 12, 8), x - face * 0.4, 1.05, z + face * 0.06));
@@ -2416,9 +2418,9 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     [-9, 0, 9].forEach(x => chandelier(D, x, 0, HH - 0.9, 0xffc070, false));
     bookshelf(-HW / 2 + 0.2, -2.6, Math.PI / 2, 1.8, 2.4); bookshelf(-HW / 2 + 0.2, 2.6, Math.PI / 2, 1.8, 2.4);
     bookshelf(HW / 2 - 0.2, -2.6, -Math.PI / 2, 1.8, 2.4); bookshelf(HW / 2 - 0.2, 2.6, -Math.PI / 2, 1.8, 2.4);
-    [[-13, -4.2], [-13, 4.2], [13, -4.2], [13, 4.2], [-7, -4.4], [7, 4.4], [0, -4.4], [0, 4.4]].forEach(([x, z]) => plant(x, z, 1.25));
+    [[-13.55, -4.3], [-13.55, 4.3], [13.55, -4.3], [13.55, 4.3], [-7, -4.4], [7, 4.4], [0, -4.4], [0, 4.4]].forEach(([x, z]) => plant(x, z, 1.25));
     const bs = bookStand(D, -11.2, -2.3, -Math.PI / 2); D.inter.push({ pos: new V3(-11.2, 0, -2.3), r: 1.6, label: () => tx('📖 كتاب المعرفة (مراجعة المحاضرات)', '📖 Book of Knowledge (lecture review)'), act: () => renderCodex(Math.min(save.unlocked, LECTURES.length - 1)) });
-    hallOfFame(D, -HW / 2 + 0.05, 0); buildReviewDoor(D);
+    hallOfFame(D, -HW / 2 + 0.05, 0);
     const title = new T.Mesh(new T.PlaneGeometry(6, 1.2), new T.MeshBasicMaterial({ map: labelTex([{ text: `${subjInfo().icon} ${subjName()}`, size: 56 }, { text: tx('THE HALL OF EIGHT DOORS', 'LIFE SKILLS & ENTREPRENEURSHIP'), size: 30, font: 'Cinzel, serif' }], { w: 1024, h: 200, rtl: true }), toneMapped: false }));
     title.position.set(-HW / 2 + 0.05, 4.3, 0); title.rotation.y = Math.PI / 2; title.scale.setScalar(0.8); G.build.add(title);
     D.clampPlayer = p => { p.x = clamp(p.x, -HW / 2 + 0.4, HW / 2 - 0.4); p.z = clamp(p.z, -HD / 2 + 0.45, HD / 2 - 0.45); };
@@ -2429,7 +2431,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     const L = LECTURES[li], st = save.stars[L.id] || 0, locked = li > save.unlocked;
     return labelTex([{ text: L.code, size: 34, font: 'Cinzel, serif', color: '#f3e6c4' }, { text: L.ar, size: 54, color: '#ffffff' }, { text: locked ? '🔒' : st ? '★'.repeat(st) + '☆'.repeat(3 - st) : tx('افتح الباب ▸', 'Open the door ▸'), size: 36, color: locked ? '#ff8a7a' : '#ffd27a' }], { w: 640, h: 240, bg1: '#2a1a12', bg2: '#140c08', border: '#d9b25f', rtl: true });
   }
-  function refreshHub() { const D = G.dungeon; if (!D || D.kind !== 'hub') return; D.doors.forEach(d => { const o = d.pm.map; d.pm.map = d.type === 'review' ? reviewPlaque() : d.type === 'mid' ? midPlaque() : d.type === 'quiz' ? quizPlaque(d.li) : hubPlaque(d.li); d.pm.needsUpdate = true; o && o.dispose(); if (d.type === 'review') { d.lightS.material.color.setHex(reviewCount() ? 0x7fe0a0 : 0x6a8a7a); return; } if (d.type === 'mid') { d.lightS.material.color.setHex(midDone() ? 0x7dff9a : midUnlocked() ? 0xffa040 : 0xff4a3a); return; } const L = LECTURES[d.li]; if (d.type === 'quiz') { d.lightS.material.color.setHex(quizPassed(L.id) ? 0x7dff9a : save.stars[L.id] ? 0x7fb8ff : 0xff4a3a); return; } d.lightS.material.color.setHex(save.stars[L.id] ? 0x7dff9a : d.li <= save.unlocked ? 0xffd27a : 0xff4a3a); }); }
+  function refreshHub() { const D = G.dungeon; if (!D || D.kind !== 'hub') return; D.doors.forEach(d => { const o = d.pm.map; d.pm.map = d.type === 'review' ? reviewPlaque(d.li) : d.type === 'mid' ? midPlaque() : d.type === 'quiz' ? quizPlaque(d.li) : hubPlaque(d.li); d.pm.needsUpdate = true; o && o.dispose(); if (d.type === 'review') { d.lightS.material.color.setHex(reviewCount(d.li) ? 0x7fe0a0 : 0x6a8a7a); return; } if (d.type === 'mid') { d.lightS.material.color.setHex(midDone() ? 0x7dff9a : midUnlocked() ? 0xffa040 : 0xff4a3a); return; } const L = LECTURES[d.li]; if (d.type === 'quiz') { d.lightS.material.color.setHex(quizPassed(L.id) ? 0x7dff9a : save.stars[L.id] ? 0x7fb8ff : 0xff4a3a); return; } d.lightS.material.color.setHex(save.stars[L.id] ? 0x7dff9a : d.li <= save.unlocked ? 0xffd27a : 0xff4a3a); }); }
   function hubLabel(li) { const L = LECTURES[li]; return li > save.unlocked ? tx(`🔒 ${L.ar} (اهزم زعيم المحاضرة السابقة)`, `🔒 ${L.ar} (defeat the previous lecture’s boss)`) : tx(`🚪 ادخل: ${L.ar}`, `🚪 Enter: ${L.ar}`); }
   function hubEnter(li) { if (li > save.unlocked) { sfx.thud(); const p = LECTURES[li - 1]; qToast(tx(`🔒 مقفول! اهزم <b>${esc(p.boss.name)}</b> في «${esc(p.ar)}» أولاً`, `🔒 Locked! Defeat <b>${esc(p.boss.name)}</b> in “${esc(p.ar)}” first`), 'bad', 3200); return; } sfx.door(); const r = save.resume; if (r && r.li === li && r.i > 0) enterDungeon(li, r); else enterDungeon(li); }
   function clearWorld() {
@@ -2568,7 +2570,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
       qToast(`✨ <b>${tx('صحيح!', 'Correct!')}</b> +${xp} XP${st.q.e ? `<span>${esc(st.q.e)}</span>` : ''}`, 'good', 4000);
       setQCard(''); run.i++; run.firstTry = true; renderHUD(); saveResume();
     } else {
-      run.firstTry = false; st.burned.push(j); d.burned = true; addReview({ q: st.q.q, o: st.q.opts.map(x => x.t), a: st.q.ans, e: st.q.e, src: st.src.title, simple: st.src.simple || '' });
+      run.firstTry = false; st.burned.push(j); d.burned = true; addReview({ lec: run.L.id, q: st.q.q, o: st.q.opts.map(x => x.t), a: st.q.ans, e: st.q.e, src: st.src.title, simple: st.src.simple || '' });
       setPlaque(d, LETTERS[j], o.t, 'burned'); d.leaf.material = d.leaf.material.clone(); d.leaf.material.color.setHex(0x4a2418);
       shadowAttack(d);
       const pos = new V3(d.x, 0.2, d.zw + 0.3);
@@ -2671,7 +2673,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
   }
   function bossAnswer(k) {
     const b = run.boss, q = b.q, o = q.opts[k]; if (!q || b.answered !== null) return;
-    b.answered = k; renderBossPanel(); if (!o.ok) addReview({ q: q.q, o: q.opts.map(x => x.t), a: q.ans, e: q.e, src: `${run.L.ar} · ${run.L.boss.name}` });
+    b.answered = k; renderBossPanel(); if (!o.ok) addReview({ lec: run.L.id, q: q.q, o: q.opts.map(x => x.t), a: q.ans, e: q.e, src: `${run.L.ar} · ${run.L.boss.name}` });
     const B = G.dungeon.boss;
     const finish = () => {
       if (!run) return;
@@ -2966,8 +2968,8 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     fadeTo(() => {
       exam = null; seatPlayer(false); setDock(''); setQCard(''); ui.boss.hidden = true; closeModal();
       buildHub(); const P = G.P;
-      const d = G.dungeon.doors.find(x => was.review ? x.type === 'review' : was.kind === 'mid' ? x.type === 'mid' : x.type === 'quiz' && x.li === was.li);
-      if (d) { if (d.type === 'review') { P.pos.set(d.x - 2.2, 0, 0); P.yaw = -Math.PI / 2; } else if (d.type === 'mid') { P.pos.set(d.x - 2.2, 0, d.z); P.yaw = -Math.PI / 2; } else { P.pos.set(d.x, 0, d.z + d.face * 2.2); P.yaw = d.face > 0 ? Math.PI : 0; } }
+      const d = G.dungeon.doors.find(x => was.review ? x.type === 'review' && x.li === was.li : was.kind === 'mid' ? x.type === 'mid' : x.type === 'quiz' && x.li === was.li);
+      if (d) { if (d.type === 'mid') { P.pos.set(d.x - 2.2, 0, d.z); P.yaw = -Math.PI / 2; } else if (d.type === 'mid') { P.pos.set(d.x - 2.2, 0, d.z); P.yaw = -Math.PI / 2; } else { P.pos.set(d.x, 0, d.z + d.face * 2.2); P.yaw = d.face > 0 ? Math.PI : 0; } }
       P.pitch = 0; setAmbience('house'); renderHUD();
     });
   }
@@ -3004,7 +3006,7 @@ const QBANK = {"c1l1":[{"q":"Which of the following is not a soft skill?","o":["
     e.answered = k; const ok = q.opts[k].ok;
     if (ok) e.right++; else { e.wrong++; e.missed.push(q); }
     if (e.review && q.item) { if (ok) q.item.ok++; else { q.item.n++; q.item.t = Date.now(); } persist(); }
-    else if (!ok) addReview({ q: q.q, o: q.opts.map(x => x.t), a: q.ans, y: q.why || null, e: '', src: (lecById(q.lec) || {}).ar ? `${lecById(q.lec).code} · ${lecById(q.lec).ar}` : '' });
+    else if (!ok) addReview({ lec: q.lec, q: q.q, o: q.opts.map(x => x.t), a: q.ans, y: q.why || null, e: '', src: (lecById(q.lec) || {}).ar ? `${lecById(q.lec).code} · ${lecById(q.lec).ar}` : '' });
     const last = e.kind === 'quiz' ? e.i >= e.qs.length - 1 : (e.right >= MID_PASS || e.wrong > MID_LIVES);
     const btn = e.kind === 'mid' && e.right >= MID_PASS ? tx('الضربة القاضية 🗡️', 'Final blow 🗡️') : e.kind === 'mid' && e.wrong > MID_LIVES ? '💀' : last ? tx('النتيجة 🏁', 'Results 🏁') : tx('التالي ▸', 'Next ▸');
     const fb = `<div class="bfb ${ok ? 'good' : 'bad'}">${ok ? (e.kind === 'mid' ? tx('⚔️ إصابة! إجابة صحيحة', '⚔️ Hit! Correct answer') : tx('✅ إجابة صحيحة!', '✅ Correct!')) : `❌ ${tx('الصحيح:', 'Correct:')} <b class="en">${esc(q.ans)}</b>`}<button class="btn small" id="bn">${btn}</button></div>`;
@@ -3205,29 +3207,44 @@ const SUBJ_EXTRA = {"cyber":{"lectures":[{"id":"cy1","code":"Week 1","en":"Intro
   }
   function resumeLabel(r) { const L = LECTURES[r.li]; return L ? tx(`▶ كمّل «${L.ar}» من الغرفة ${r.i + 1}`, `▶ Continue “${L.ar}” from room ${r.i + 1}`) : ''; }
 
-  /* ---------- the review door: every mistake goes in ---------- */
+  /* ---------- review doors: one per lecture, every mistake in that lecture goes in ---------- */
+  // older saves stored mistakes without a lecture id: find it from the question text or the source label
+  function lecOfReview(it) {
+    if (it.lec && LECTURES.some(L => L.id === it.lec)) return it.lec;
+    const q = String(it.q || ''), src = String(it.src || '');
+    for (const L of LECTURES) {
+      if ((L.steps || []).some(s => s.title === src || (s.qs || []).some(x => x.q === q)) || (L.bossQs || []).some(x => x.q === q) || (QBANK[L.id] || []).some(x => x.q === q)) return L.id;
+      if (src && (src.startsWith(L.code + ' · ') || src.startsWith(L.ar + ' · '))) return L.id;
+    }
+    return null;
+  }
+  function reviewItems(li) {
+    const L = LECTURES[li]; if (!L) return [];
+    return (save.review || []).filter(it => { if (!it.lec) { const id = lecOfReview(it); if (id) it.lec = id; } return it.lec === L.id; });
+  }
   function addReview(it) {
     if (!it || !it.q || !it.a) return; save.review = save.review || [];
     const old = save.review.find(r => r.q === it.q);
-    if (old) { old.n++; old.t = Date.now(); if (!old.o || old.o.length < (it.o || []).length) old.o = it.o; }
+    if (old) { old.n++; old.t = Date.now(); if (!old.o || old.o.length < (it.o || []).length) old.o = it.o; if (!old.lec && it.lec) old.lec = it.lec; }
     else save.review.push(Object.assign({ n: 1, ok: 0, t: Date.now() }, it));
     if (save.review.length > 400) { save.review.sort((a, b) => (b.n - b.ok) - (a.n - a.ok) || b.t - a.t); save.review.length = 400; }
     persist(); refreshHub();
   }
-  const reviewCount = () => (save.review || []).length;
-  function startReview() {
-    const items = (save.review || []).slice(); if (!items.length) { sfx.thud(); qToast(tx('📒 باب المراجعة فارغ — أي سؤال تغلط فيه يُضاف هنا تلقائياً', '📒 The review door is empty — every question you miss is added here automatically'), 'good', 3500); return; }
+  const reviewCount = li => li == null ? (save.review || []).length : reviewItems(li).length;
+  function startReview(li) {
+    li = li == null ? 0 : li; const LL = LECTURES[li]; if (!LL) return;
+    const items = reviewItems(li).slice(); if (!items.length) { sfx.thud(); qToast(tx(`📒 مراجعة «${esc(LL.ar)}» فارغة — أي سؤال تغلط فيه بهذه المحاضرة يُضاف هنا تلقائياً`, `📒 The “${esc(LL.ar)}” review door is empty — every question you miss in this lecture is added here automatically`), 'good', 3500); return; }
     // weakest first: most mistakes minus successes, then the most recent
     items.sort((a, b) => (b.n - b.ok) - (a.n - a.ok) || b.t - a.t);
     const pick = shuffle(items.slice(0, 16)).slice(0, Math.min(10, items.length));
-    const L = { id: 'review', code: 'REVIEW', en: 'My mistakes', ar: tx('مراجعة أخطائي', 'My mistakes') };
+    const L = { id: 'review', code: LL.code, en: LL.en, ar: tx(`مراجعة: ${LL.ar}`, `Review: ${LL.ar}`) };
     sfx.door();
     fadeTo(() => {
       run = null; buildQuizRoom(L);
-      const qs = pick.map(it => ({ q: it.q, opts: shuffle(it.o.map(t => ({ t, ok: t === it.a }))), ans: it.a, lec: null, k: -1, why: it.y || (it.e ? [it.e, it.e] : null), item: it }));
-      const ex = exam = { kind: 'quiz', review: true, li: -1, L, qs, i: -1, right: 0, wrong: 0, answered: null, missed: [] };
+      const qs = pick.map(it => ({ q: it.q, opts: shuffle(it.o.map(t => ({ t, ok: t === it.a }))), ans: it.a, lec: LL.id, k: -1, why: it.y || (it.e ? [it.e, it.e] : null), item: it }));
+      const ex = exam = { kind: 'quiz', review: true, li, L, qs, i: -1, right: 0, wrong: 0, answered: null, missed: [] };
       seatPlayer(true); setAmbience('house'); setQCard(''); setDock(''); ui.boss.hidden = true; renderHUD();
-      say(tx('دفتر المراجعة', 'Review notebook'), tx(`📒 هذه أسئلة غلطت فيها من قبل (${items.length} سؤال). أجب عليها، والشرح الإضافي يظهر بعد كل جواب. الأسئلة تبقى هنا حتى لو جاوبتها صح.`, `📒 These are questions you missed before (${items.length}). Answer them — extra explanation appears after each one. They stay here even if you get them right.`), '📒', 5000);
+      say(tx('دفتر المراجعة', 'Review notebook'), tx(`📒 هذه أسئلة غلطت فيها في «${esc(LL.ar)}» (${items.length} سؤال). أجب عليها، والشرح الإضافي يظهر بعد كل جواب. الأسئلة تبقى هنا حتى لو جاوبتها صح.`, `📒 These are questions you missed in “${esc(LL.ar)}” (${items.length}). Answer them — extra explanation appears after each one. They stay here even if you get them right.`), '📒', 5000);
       setTimeout(() => { if (exam === ex && ex.i === -1) nextExamQ(); }, 1500);
     });
   }
@@ -3243,24 +3260,24 @@ const SUBJ_EXTRA = {"cyber":{"lectures":[{"id":"cy1","code":"Week 1","en":"Intro
     gainXP(e.right * 4);
     openModal(`<section style="text-align:center"><div class="big">📒</div><h1 class="overlay">${tx('انتهت جولة المراجعة', 'Review round done')}</h1>
       <p>✅ ${e.right} · ❌ ${e.wrong} ${tx('من', 'of')} ${e.qs.length}</p>
-      <p class="muted">${tx(`في باب المراجعة الآن ${reviewCount()} سؤال. كل سؤال تغلط فيه يُضاف وحده.`, `The review door now holds ${reviewCount()} questions. Every question you miss is added automatically.`)}</p>
+      <p class="muted">${tx(`في مراجعة هذه المحاضرة الآن ${reviewCount(e.li)} سؤال. كل سؤال تغلط فيه يُضاف وحده.`, `This lecture's review door now holds ${reviewCount(e.li)} questions. Every question you miss is added automatically.`)}</p>
       <div class="row center mt"><button class="btn" id="rv-again">${tx('🔁 جولة جديدة', '🔁 Another round')}</button><button class="btn ghost" id="rv-x">${tx('🚪 قاعة الأبواب', '🚪 Hall of Doors')}</button></div></section>`, 'menu', true);
-    $('#rv-again').onclick = () => { closeModal(); startReview(); }; $('#rv-x').onclick = () => leaveExam();
+    $('#rv-again').onclick = () => { closeModal(); startReview(e.li); }; $('#rv-x').onclick = () => leaveExam();
   }
-  function reviewPlaque() {
-    const n = reviewCount();
-    return labelTex([{ text: tx('📒 باب المراجعة', '📒 Review Door'), size: 50, color: '#ffffff' }, { text: n ? tx(`${n} سؤال غلطت فيه`, `${n} missed questions`) : tx('لا أخطاء بعد 🎉', 'No mistakes yet 🎉'), size: 34, color: n ? '#9ff0b0' : '#cfe6ff' }], { w: 560, h: 200, bg1: '#123a22', bg2: '#081c10', border: '#7fe0a0', rtl: true });
+  function reviewPlaque(li) {
+    const L = LECTURES[li], n = reviewCount(li);
+    return labelTex([{ text: tx('📒 مراجعة', '📒 REVIEW'), size: 40, color: '#ffffff' }, { text: L ? L.code : '', size: 36, font: 'Cinzel, serif', color: '#ffffff' }, { text: n ? tx(`${n} غلطة`, `${n} missed`) : tx('لا أخطاء 🎉', 'No mistakes 🎉'), size: 34, color: n ? '#9ff0b0' : '#cfe6ff' }], { w: 420, h: 220, bg1: '#123a22', bg2: '#081c10', border: '#7fe0a0', rtl: true });
   }
-  function buildReviewDoor(D) {
-    const x = -6.4, W = 1.5, H = 2.6;
-    const f = doorFrame(x, 0, W, H); f.rotation.y = -Math.PI / 2;
-    G.build.add(at(rbox(0.08, H - 0.03, W - 0.04, std(0x3f8a55, { map: G.tex.door, rough: .45, em: 0x0a2a14, ei: .35 }), 0.012), x, H / 2, 0));
-    G.build.add(at(sph(0.05, M.gold, 12, 8), x - 0.06, 1.2, 0.5));
-    const pm = new T.MeshBasicMaterial({ map: reviewPlaque(), toneMapped: false }); const pl = new T.Mesh(new T.PlaneGeometry(1.9, 0.68), pm); pl.position.set(x - 0.1, H + 0.6, 0); pl.rotation.y = -Math.PI / 2; G.build.add(pl);
-    const lightS = glowSprite(0x7fe0a0, 1.0, .9); lightS.position.set(x - 0.4, H + 0.1, 0); G.build.add(lightS);
-    D.boxes.push({ x0: x - 0.25, x1: x + 0.25, z0: -W / 2 - 0.2, z1: W / 2 + 0.2, y0: 0, y1: H, off: false });
-    D.doors.push({ type: 'review', li: -2, x, z: 0, face: 0, pm, lightS });
-    D.inter.push({ pos: new V3(x - 1.1, 0, 0), r: 1.5, label: () => tx(`📒 باب المراجعة (${reviewCount()})`, `📒 Review door (${reviewCount()})`), act: () => startReview() });
+  function reviewLabel(li) { const L = LECTURES[li], n = reviewCount(li); return n ? tx(`📒 مراجعة أخطائي: ${L.ar} (${n})`, `📒 Review my mistakes: ${L.ar} (${n})`) : tx(`📒 مراجعة ${L.ar}: لا أخطاء بعد`, `📒 ${L.ar} review: no mistakes yet`); }
+  // a green door in the wall next to the lecture door (same size as the quiz door)
+  function buildReviewDoor(D, li, x, z, face) {
+    const W = 1.15, H = 2.25;
+    G.build.add(at(rbox(W - 0.04, H - 0.03, 0.08, std(0x3f8a55, { map: G.tex.door, rough: .45, em: 0x0a2a14, ei: .35 }), 0.012), x, H / 2, z));
+    G.build.add(at(sph(0.04, M.gold, 12, 8), x + face * 0.4, 1.05, z + face * 0.06));
+    const pm = new T.MeshBasicMaterial({ map: reviewPlaque(li), toneMapped: false }); const pl = new T.Mesh(new T.PlaneGeometry(1.35, 0.71), pm); pl.position.set(x, H + 0.62, z + face * 0.03); if (face < 0) pl.rotation.y = Math.PI; G.build.add(pl);
+    const lightS = glowSprite(0x7fe0a0, 0.8, .9); lightS.position.set(x, H + 0.12, z + face * 0.25); G.build.add(lightS);
+    D.doors.push({ type: 'review', li, x, z, face, pm, lightS });
+    D.inter.push({ pos: new V3(x, 0, z + face * 1.1), r: 1.2, label: () => reviewLabel(li), act: () => startReview(li) });
   }
 
   /* =========================================================
@@ -3382,7 +3399,7 @@ const SUBJ_EXTRA = {"cyber":{"lectures":[{"id":"cy1","code":"Week 1","en":"Intro
     G.mode = 'title'; renderHUD(); ui.prompt.hidden = true; ui.cross.hidden = true; ui.eye.hidden = true; ui.sub.hidden = true;
     const started = save.started, lv = lvlOf(save.xp);
     openModal(`<section class="title-card"><h1>${tx('قاعة الأبواب', 'Hall of Doors')}</h1><p class="latin en muted" style="margin-top:-4px">${tx('THE HALL OF DOORS · ', '')}${esc(subjInfo().en.toUpperCase())}</p>
-      <p class="tsub">${tx('لكل محاضرة باب. خلف كل باب ممر من الغرف المرقّمة: اقرأ المخطوطة، اختر الباب الصحيح قبل أن يخرج <b>الظل</b>، حلّ ألغاز المراجعة على السبّورات… واهزم الزعيم لتفتح الباب التالي. بجانب كل محاضرة <b>باب كويز</b> 📝، وفي نهاية القاعة <b>🎓 الامتحان النصفي</b>، والباب الأخضر <b>📒 باب المراجعة</b> يجمع كل سؤال غلطت فيه. اختر المادة من الأزرار تحت 👇', 'One door for each lecture. Behind each door is a corridor of numbered rooms: read the scroll, choose the right door before <b>the Shadow</b> comes out, solve the review puzzles on the boards… and defeat the boss to open the next door. Beside every lecture is a <b>quiz door</b> 📝 from its exercises, the end of the hall holds <b>🎓 the MID exam</b>, and the green <b>📒 review door</b> collects every question you missed. Pick your subject below 👇')}</p>
+      <p class="tsub">${tx('لكل محاضرة باب. خلف كل باب ممر من الغرف المرقّمة: اقرأ المخطوطة، اختر الباب الصحيح قبل أن يخرج <b>الظل</b>، حلّ ألغاز المراجعة على السبّورات… واهزم الزعيم لتفتح الباب التالي. لكل محاضرة ثلاثة أبواب: <b>📝 الكويز</b> على اليسار، والمحاضرة في الوسط، و<b>📒 باب المراجعة</b> الأخضر على اليمين يجمع كل سؤال غلطت فيه بهذه المحاضرة. وفي نهاية القاعة <b>🎓 الامتحان النصفي</b>. اختر المادة من الأزرار تحت 👇', 'One door for each lecture. Behind each door is a corridor of numbered rooms: read the scroll, choose the right door before <b>the Shadow</b> comes out, solve the review puzzles on the boards… and defeat the boss to open the next door. Every lecture has three doors: <b>📝 the quiz</b> on the left, the lecture in the middle, and the green <b>📒 review door</b> on the right, which collects every question you missed in that lecture. The end of the hall holds <b>🎓 the MID exam</b>. Pick your subject below 👇')}</p>
       ${started ? `<p><span class="chip">Lv ${lv} · ${esc(titleOf(lv))}</span> <span class="chip">🏆 ${Object.keys(save.stars).length}/${LECTURES.length}</span> <span class="chip">📝 ${LECTURES.filter(L => quizPassed(L.id)).length}/${LECTURES.length}</span> <span class="chip">🏅 ${calcPoints()} ${tx('نقطة', 'points')}</span></p>` : ''}
       ${subjectChips()}
       ${save.resume && LECTURES[save.resume.li] ? `<p class="resume-hint">${resumeLabel(save.resume)}</p>` : ''}
